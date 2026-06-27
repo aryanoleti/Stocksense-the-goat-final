@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Logo, LogoMark } from "./Logo";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { cn } from "@/lib/cn";
 
 const PRIMARY = [
@@ -198,15 +199,7 @@ function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <Bell className="h-[18px] w-[18px]" />
           <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-(--color-brand-500)" />
         </button>
-        <div className="flex items-center gap-2.5 rounded-xl border border-(--color-border) bg-(--color-surface) px-2 py-1.5">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-(--color-brand-700) text-[12px] font-semibold text-white">
-            AO
-          </span>
-          <span className="hidden sm:block">
-            <span className="block text-[13px] font-semibold leading-tight text-(--color-fg)">aryan.oleti</span>
-            <span className="block text-[11px] text-(--color-fg-subtle)">Premium</span>
-          </span>
-        </div>
+        <UserMenu />
       </div>
     </header>
   );

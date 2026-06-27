@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -15,6 +16,7 @@ const links = [
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false);
+  const { user, openSignIn } = useAuth();
   return (
     <header className="sticky top-0 z-40 w-full">
       <div className="mx-auto max-w-7xl px-5 py-4">
@@ -32,12 +34,24 @@ export function MarketingNav() {
             ))}
           </nav>
           <div className="hidden items-center gap-2 md:flex">
-            <Button href="/dashboard" variant="ghost" size="sm" className="text-white hover:bg-white/10">
-              Sign in
-            </Button>
-            <Button href="/dashboard" size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
-              Get started
-            </Button>
+            {user ? (
+              <Button href="/dashboard" size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
+                Open dashboard
+              </Button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={openSignIn}
+                  className="inline-flex h-9 items-center rounded-xl px-3.5 text-sm font-medium text-white hover:bg-white/10"
+                >
+                  Sign in
+                </button>
+                <Button href="/dashboard" size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
+                  Get started
+                </Button>
+              </>
+            )}
           </div>
           <button
             type="button"
@@ -57,12 +71,27 @@ export function MarketingNav() {
                 </Link>
               ))}
               <div className="flex gap-2 pt-2">
-                <Button href="/dashboard" variant="outline" size="sm" className="w-full bg-transparent text-white border-white/20">
-                  Sign in
-                </Button>
-                <Button href="/dashboard" size="sm" className="w-full bg-white text-(--color-brand-900) shadow-none">
-                  Get started
-                </Button>
+                {user ? (
+                  <Button href="/dashboard" size="sm" className="w-full bg-white text-(--color-brand-900) shadow-none">
+                    Open dashboard
+                  </Button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        openSignIn();
+                      }}
+                      className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-white/20 px-3.5 text-sm font-medium text-white"
+                    >
+                      Sign in
+                    </button>
+                    <Button href="/dashboard" size="sm" className="w-full bg-white text-(--color-brand-900) shadow-none">
+                      Get started
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>

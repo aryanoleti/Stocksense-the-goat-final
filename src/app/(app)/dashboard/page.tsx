@@ -3,6 +3,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { IndexCard } from "@/components/market/IndexCard";
 import { MoversTable } from "@/components/market/MoversTable";
 import { SearchHero } from "@/components/market/SearchHero";
+import { Greeting } from "@/components/layout/Greeting";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -11,13 +12,6 @@ import { INDICES, NIFTY_50 } from "@/lib/mock-data";
 const SHORTCUTS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BHARTIARTL", "TATAMOTORS"];
 const TRENDING = ["ADANIENT", "TATAMOTORS", "SBIN", "ICICIBANK", "RELIANCE", "BHARTIARTL"];
 const RECENT = ["ADANIENT", "SUNPHARMA", "AXISBANK", "BAJFINANCE", "KOTAKBANK", "HCLTECH"];
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
 
 export default function DashboardPage() {
   return (
@@ -32,7 +26,7 @@ export default function DashboardPage() {
             Smart stock discovery
           </Badge>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-[40px] sm:leading-[1.1]">
-            {greeting()}, Aryan.
+            <Greeting fallbackName="there" />
           </h1>
           <p className="mt-2 max-w-xl text-[15px] text-white/70">
             Track live Nifty 50 prices, analyse trends, simulate your portfolio and get AI insights — all in one place.
