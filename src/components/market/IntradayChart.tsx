@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -10,10 +10,43 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { getChart } from "@/lib/api/yahoo";
 import { generateIntraday } from "@/lib/mock-data";
 
-export function IntradayChart({ base, seed = 1 }: { base: number; seed?: number }) {
-  const data = useMemo(() => generateIntraday(base, 78, seed), [base, seed]);
+type Point = { time: string; price: number };
+
+export function IntradayChart({ symbol, base, seed = 1 }: { symbol?: string; base: number; seed?: number }) {
+  const fallback = useMemo<Point[]>(() => generateIntraday(base, 78, seed), [base, seed]);
+  const [data, setData] = useState<Point[]>(fallback);
+
+  useEffect(() => {
+    if (!symbol) {
+      setData(fallback);
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      const r = await getChart(symbol!, "1d", "5m");
+      if (cancelled) return;
+      if (!r || r.candles.length === 0) {
+        setData(fallback);
+        return;
+      }
+      setData(
+        r.candles.map((c) => ({
+          time: new Date(c.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+          price: Math.round(c.price * 100) / 100,
+        })),
+      );
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [symbol, fallback]);
+
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -30,7 +63,7 @@ export function IntradayChart({ base, seed = 1 }: { base: number; seed?: number 
             stroke="#7c8a82"
             tickLine={false}
             axisLine={false}
-            interval={Math.floor(data.length / 6)}
+            interval={Math.max(1, Math.floor(data.length / 6))}
             tick={{ fontSize: 11 }}
           />
           <YAxis
@@ -40,7 +73,7 @@ export function IntradayChart({ base, seed = 1 }: { base: number; seed?: number 
             domain={["dataMin - 20", "dataMax + 20"]}
             tick={{ fontSize: 11 }}
             width={56}
-            tickFormatter={(v) => v.toLocaleString("en-IN")}
+            tickFormatter={(v) => Number(v).toLocaleString("en-IN")}
           />
           <Tooltip
             contentStyle={{

@@ -5,20 +5,35 @@ import { Send, Sparkles, TrendingUp, AlertTriangle, ArrowRight, Bot } from "luci
 import Link from "next/link";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { generateJson, hasGeminiKey, type GeminiContent } from "@/lib/api/gemini";
+import { getQuote } from "@/lib/api/yahoo";
+import { NIFTY_50 } from "@/lib/mock-data";
+
+type Rich = {
+  confidence?: number;
+  stock?: { symbol: string; name: string; price: number; changePct: number };
+  metrics?: { label: string; value: string }[];
+  bullets?: string[];
+  risks?: string[];
+  opportunities?: string[];
+  related?: string[];
+};
 
 type Message = {
   id: string;
   role: "user" | "ai";
   text: string;
-  rich?: {
-    confidence?: number;
-    stock?: { symbol: string; name: string; price: number; changePct: number };
-    metrics?: { label: string; value: string }[];
-    bullets?: string[];
-    risks?: string[];
-    opportunities?: string[];
-    related?: string[];
-  };
+  rich?: Rich;
+};
+
+type GeminiAnswer = {
+  text: string;
+  confidence?: number;
+  symbol?: string;
+  bullets?: string[];
+  opportunities?: string[];
+  risks?: string[];
+  related?: string[];
 };
 
 const SUGGESTED = [
@@ -39,6 +54,61 @@ const INITIAL: Message[] = [
   },
 ];
 
+const SYSTEM_PROMPT = `You are Sense, an AI markets assistant for Indian retail investors using a stock-research app called StockSense.
+Reply briefly and clearly in plain English. Educational tone, never give explicit buy/sell advice.
+
+You MUST respond with a single JSON object matching this TypeScript type — no markdown, no prose outside the JSON:
+{
+  "text": string,                              // 2-3 sentence natural-language answer
+  "confidence": number,                        // 0-100, how confident you are
+  "symbol"?: string,                           // NSE ticker (e.g. "RELIANCE", "INFY") if the answer focuses on one stock. Use the ticker only, no ".NS" suffix.
+  "bullets"?: string[],                        // 3-5 short summary bullets
+  "opportunities"?: string[],                  // up to 3 short upside points (only if relevant)
+  "risks"?: string[],                          // up to 3 short downside points (only if relevant)
+  "related"?: string[]                         // up to 4 related NSE tickers
+}
+
+Always use Indian-context examples and INR. If the user asks about a US stock, return its US ticker in "symbol" only if asked specifically.`;
+
+function findKnownSymbol(text: string): string | undefined {
+  const upper = text.toUpperCase();
+  return NIFTY_50.find((s) => upper.includes(s.symbol))?.symbol;
+}
+
+async function hydrateStockCard(answer: GeminiAnswer): Promise<Rich["stock"] | undefined> {
+  const sym = answer.symbol?.toUpperCase();
+  if (!sym) return undefined;
+  const known = NIFTY_50.find((s) => s.symbol === sym);
+  const name = known?.name ?? sym;
+  const quote = await getQuote(sym);
+  if (quote) {
+    return { symbol: sym, name, price: quote.price, changePct: quote.changePct };
+  }
+  if (known) {
+    return { symbol: sym, name: known.name, price: known.basePrice, changePct: 0 };
+  }
+  return undefined;
+}
+
+function fallbackResponse(prompt: string): Message {
+  return {
+    id: `a-${Date.now()}`,
+    role: "ai",
+    text: hasGeminiKey()
+      ? "I couldn't reach Gemini just now — please try again in a moment."
+      : "Add a NEXT_PUBLIC_GEMINI_KEY to enable real AI responses. In the meantime, " +
+        "for a question like \"" + prompt + "\" I'd start with last earnings, peer multiples, and recent news.",
+    rich: {
+      confidence: 30,
+      bullets: [
+        "Check the latest quarterly results and management commentary",
+        "Compare valuation multiples (P/E, P/B) to sector peers",
+        "Look at recent news, analyst revisions and insider activity",
+      ],
+    },
+  };
+}
+
 export function AskAi() {
   const [messages, setMessages] = useState<Message[]>(INITIAL);
   const [input, setInput] = useState("");
@@ -49,17 +119,47 @@ export function AskAi() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, thinking]);
 
-  function send(prompt: string) {
-    if (!prompt.trim()) return;
-    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: prompt.trim() };
-    setMessages((m) => [...m, userMsg]);
+  async function send(prompt: string) {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: trimmed };
+    const next = [...messages, userMsg];
+    setMessages(next);
     setInput("");
     setThinking(true);
 
-    setTimeout(() => {
-      setMessages((m) => [...m, buildResponse(prompt)]);
-      setThinking(false);
-    }, 900 + Math.random() * 700);
+    const history: GeminiContent[] = next
+      .filter((m) => m.id !== "seed-1")
+      .map((m) => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.text }],
+      }));
+
+    let aiMsg: Message;
+    const answer = await generateJson<GeminiAnswer>(history, { system: SYSTEM_PROMPT, temperature: 0.55 });
+    if (!answer) {
+      aiMsg = fallbackResponse(trimmed);
+    } else {
+      const stock = await hydrateStockCard({
+        ...answer,
+        symbol: answer.symbol ?? findKnownSymbol(trimmed),
+      });
+      aiMsg = {
+        id: `a-${Date.now()}`,
+        role: "ai",
+        text: answer.text,
+        rich: {
+          confidence: answer.confidence,
+          stock,
+          bullets: answer.bullets,
+          opportunities: answer.opportunities,
+          risks: answer.risks,
+          related: answer.related,
+        },
+      };
+    }
+    setMessages((m) => [...m, aiMsg]);
+    setThinking(false);
   }
 
   return (
@@ -103,7 +203,7 @@ export function AskAi() {
             </span>
             <div>
               <p className="text-[14px] font-semibold tracking-tight">Ask the AI</p>
-              <p className="text-[11.5px] text-(--color-fg-subtle)">Powered by Sense · responses are simulated</p>
+              <p className="text-[11.5px] text-(--color-fg-subtle)">Powered by Gemini · live prices via Yahoo Finance</p>
             </div>
           </div>
           <Badge tone="brand">Beta</Badge>
@@ -209,7 +309,7 @@ function AiBubble({ msg }: { msg: Message }) {
             </div>
           </div>
         )}
-        {r?.bullets && (
+        {r?.bullets && r.bullets.length > 0 && (
           <div className="rounded-2xl border border-(--color-border) bg-(--color-surface) p-4">
             <CardEyebrow>Summary</CardEyebrow>
             <ul className="mt-2 space-y-1.5 text-[13.5px] text-(--color-fg)">
@@ -222,9 +322,9 @@ function AiBubble({ msg }: { msg: Message }) {
             </ul>
           </div>
         )}
-        {(r?.opportunities || r?.risks) && (
+        {((r?.opportunities && r.opportunities.length > 0) || (r?.risks && r.risks.length > 0)) && (
           <div className="grid gap-3 sm:grid-cols-2">
-            {r?.opportunities && (
+            {r?.opportunities && r.opportunities.length > 0 && (
               <div className="rounded-2xl border border-(--color-up)/20 bg-(--color-up-soft)/40 p-4">
                 <CardEyebrow className="text-(--color-up)">Opportunities</CardEyebrow>
                 <ul className="mt-2 space-y-1.5 text-[13px] text-(--color-fg)">
@@ -237,7 +337,7 @@ function AiBubble({ msg }: { msg: Message }) {
                 </ul>
               </div>
             )}
-            {r?.risks && (
+            {r?.risks && r.risks.length > 0 && (
               <div className="rounded-2xl border border-(--color-down)/20 bg-(--color-down-soft)/40 p-4">
                 <CardEyebrow className="text-(--color-down)">Risks</CardEyebrow>
                 <ul className="mt-2 space-y-1.5 text-[13px] text-(--color-fg)">
@@ -266,7 +366,7 @@ function AiBubble({ msg }: { msg: Message }) {
             <p className="text-[12px] font-semibold tabular">{r.confidence}%</p>
           </div>
         )}
-        {r?.related && (
+        {r?.related && r.related.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             <span className="text-[11.5px] text-(--color-fg-subtle)">Related:</span>
             {r.related.map((sym) => (
@@ -307,87 +407,4 @@ function Dot({ delay = 0 }: { delay?: number }) {
       style={{ animationDelay: `${delay}ms` }}
     />
   );
-}
-
-function buildResponse(prompt: string): Message {
-  const p = prompt.toLowerCase();
-  if (/(infy|infosys|tcs|hdfc|icici|sbi|reliance|adani|tata|kotak|axis|bharti|hcl|wipro)/i.test(p)) {
-    const sym = (p.match(/infy|infosys|tcs|hdfc|icici|sbi|reliance|adani|tata|kotak|axis|bharti|hcl|wipro/i) ?? ["infy"])[0].toUpperCase();
-    const map: Record<string, { symbol: string; name: string; price: number; changePct: number }> = {
-      INFY: { symbol: "INFY", name: "Infosys", price: 1814.55, changePct: 0.62 },
-      INFOSYS: { symbol: "INFY", name: "Infosys", price: 1814.55, changePct: 0.62 },
-      TCS: { symbol: "TCS", name: "Tata Consultancy Services", price: 3942.10, changePct: -0.18 },
-      HDFC: { symbol: "HDFCBANK", name: "HDFC Bank", price: 1698.20, changePct: 0.42 },
-      ICICI: { symbol: "ICICIBANK", name: "ICICI Bank", price: 1241.85, changePct: 0.95 },
-      SBI: { symbol: "SBIN", name: "State Bank of India", price: 814.30, changePct: -0.34 },
-      RELIANCE: { symbol: "RELIANCE", name: "Reliance Industries", price: 2856.45, changePct: -1.20 },
-      ADANI: { symbol: "ADANIENT", name: "Adani Enterprises", price: 2186.20, changePct: -1.28 },
-      TATA: { symbol: "TATAMOTORS", name: "Tata Motors", price: 712.80, changePct: 1.85 },
-      KOTAK: { symbol: "KOTAKBANK", name: "Kotak Mahindra Bank", price: 1748.55, changePct: 0.86 },
-      AXIS: { symbol: "AXISBANK", name: "Axis Bank", price: 1098.40, changePct: -4.58 },
-      BHARTI: { symbol: "BHARTIARTL", name: "Bharti Airtel", price: 1632.40, changePct: 0.88 },
-      HCL: { symbol: "HCLTECH", name: "HCL Technologies", price: 1290.40, changePct: -10.51 },
-      WIPRO: { symbol: "WIPRO", name: "Wipro", price: 543.80, changePct: 0.21 },
-    };
-    const stock = map[sym] ?? map.INFY;
-    return {
-      id: `a-${Date.now()}`,
-      role: "ai",
-      text: `Here's a quick read on ${stock.name}. The stock is ${stock.changePct >= 0 ? "up" : "down"} ${Math.abs(stock.changePct).toFixed(2)}% today. The broader picture is a mix of ${stock.changePct >= 0 ? "supportive momentum" : "near-term pressure"} and fundamentals worth understanding.`,
-      rich: {
-        stock,
-        confidence: 78,
-        metrics: [
-          { label: "P/E", value: "26.5" },
-          { label: "Mkt Cap", value: "₹7.5L Cr" },
-          { label: "Beta", value: "0.85" },
-          { label: "Div yld", value: "2.1%" },
-        ],
-        bullets: [
-          "Earnings stable with margin tailwinds expected in H2",
-          "Order book at multi-quarter highs supports topline visibility",
-          "Trades at a slight discount to its 5-year average valuation",
-        ],
-        opportunities: [
-          "Sector tailwinds from enterprise digital spend",
-          "Improving free cash flow per share",
-        ],
-        risks: [
-          "USD softness can compress reported revenues",
-          "Wage inflation in skilled talent pools",
-        ],
-        related: ["TCS", "HCLTECH", "WIPRO"],
-      },
-    };
-  }
-  if (/p\/e|valuation|valued/i.test(p)) {
-    return {
-      id: `a-${Date.now()}`,
-      role: "ai",
-      text:
-        "The P/E ratio shows how much you pay for every rupee of a company's earnings. A high P/E can signal high growth expectations — or overvaluation. Compare to peers and to the company's own historical average for context.",
-      rich: {
-        confidence: 92,
-        bullets: [
-          "P/E = Price ÷ EPS (earnings per share)",
-          "Useful only when compared to peers in the same sector",
-          "Always check earnings quality alongside the multiple",
-        ],
-      },
-    };
-  }
-  return {
-    id: `a-${Date.now()}`,
-    role: "ai",
-    text:
-      "Good question. Here's how I'd think about that — start with what's changed in the last 90 days (earnings, news, macro), check the fundamentals you can verify (margins, debt, growth), then compare against 2-3 peers. Ask me about a specific company to go deeper.",
-    rich: {
-      confidence: 60,
-      bullets: [
-        "Look at last earnings call commentary",
-        "Compare valuation to sector median",
-        "Check insider activity and analyst revisions",
-      ],
-    },
-  };
 }

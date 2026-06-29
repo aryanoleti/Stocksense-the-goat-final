@@ -26,7 +26,7 @@ function sparkSeries(base: number, seed: number) {
 }
 
 export function IndexCard({ symbol, name, base, volatility = 0.0018, highlight }: Props) {
-  const tick = useLivePrice(base, volatility);
+  const tick = useLivePrice(symbol, base, volatility);
   const data = useMemo(() => sparkSeries(base, symbol.charCodeAt(0)), [base, symbol]);
   const up = tick.changePct >= 0;
   const color = up ? "#088a52" : "#c4361c";

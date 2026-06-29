@@ -6,7 +6,7 @@ import { DeltaValue } from "@/components/ui/Delta";
 import { LiveDot } from "@/components/ui/Badge";
 
 export function StockHeader({ symbol, name, sector, basePrice }: { symbol: string; name: string; sector: string; basePrice: number }) {
-  const tick = useLivePrice(basePrice, 0.0028);
+  const tick = useLivePrice(symbol, basePrice, 0.0028);
   return (
     <header className="flex flex-wrap items-end justify-between gap-6 rounded-3xl bg-(--color-surface) border border-(--color-border) p-6 sm:p-8">
       <div>

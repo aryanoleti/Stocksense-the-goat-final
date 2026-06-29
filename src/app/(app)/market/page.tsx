@@ -54,7 +54,7 @@ export default function MarketPage() {
               ))}
             </div>
           </CardHeader>
-          <IntradayChart base={INDICES[0].base} />
+          <IntradayChart symbol={INDICES[0].symbol} base={INDICES[0].base} />
         </Card>
 
         <Card padding="md">

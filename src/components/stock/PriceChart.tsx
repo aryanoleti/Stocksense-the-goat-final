@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   ComposedChart,
@@ -10,28 +10,68 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { getChart, type ChartInterval, type ChartRange } from "@/lib/api/yahoo";
 import { generateForecast, generatePriceHistory } from "@/lib/mock-data";
 
-const RANGES = [
-  { id: "1W", days: 7 },
-  { id: "1M", days: 30 },
-  { id: "3M", days: 90 },
-  { id: "1Y", days: 365 },
+type Range = { id: string; days: number; range: ChartRange; interval: ChartInterval };
+
+const RANGES: Range[] = [
+  { id: "1W", days: 7, range: "5d", interval: "30m" },
+  { id: "1M", days: 30, range: "1mo", interval: "1d" },
+  { id: "3M", days: 90, range: "3mo", interval: "1d" },
+  { id: "1Y", days: 365, range: "1y", interval: "1d" },
 ];
 
+type HistoryPoint = { date: string; price: number };
+
+function formatLabel(time: number, interval: ChartInterval): string {
+  const d = new Date(time);
+  if (interval === "30m" || interval === "1h" || interval === "5m" || interval === "15m") {
+    return d.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+}
+
 export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: number }) {
-  const [range, setRange] = useState("1M");
+  const [range, setRange] = useState<Range>(RANGES[1]);
   const seed = symbol.charCodeAt(0) + symbol.charCodeAt(1);
-  const days = RANGES.find((r) => r.id === range)!.days;
-  const history = useMemo(() => generatePriceHistory(basePrice, days, seed), [basePrice, days, seed]);
-  const forecast = useMemo(() => generateForecast(history[history.length - 1].price, 7, seed), [history, seed]);
+
+  const mockHistory = useMemo<HistoryPoint[]>(
+    () => generatePriceHistory(basePrice, range.days, seed),
+    [basePrice, range.days, seed],
+  );
+  const [history, setHistory] = useState<HistoryPoint[]>(mockHistory);
+
+  useEffect(() => {
+    setHistory(mockHistory);
+    let cancelled = false;
+    async function load() {
+      const r = await getChart(symbol, range.range, range.interval);
+      if (cancelled || !r || r.candles.length === 0) return;
+      setHistory(
+        r.candles.map((c) => ({
+          date: formatLabel(c.time, range.interval),
+          price: Math.round(c.price * 100) / 100,
+        })),
+      );
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, range, mockHistory]);
+
+  const forecast = useMemo(() => {
+    const last = history[history.length - 1];
+    return last ? generateForecast(last.price, 7, seed) : [];
+  }, [history, seed]);
 
   const data = useMemo(() => {
+    if (history.length === 0) return [];
     const merged: Array<{ date: string; price?: number; forecast?: number }> = history.map((h) => ({
       date: h.date,
       price: h.price,
     }));
-    // bridge last historical point into the forecast line
     const last = history[history.length - 1];
     merged.push({ date: last.date, price: last.price, forecast: last.price });
     forecast.forEach((f) => merged.push({ date: f.date, forecast: f.price }));
@@ -46,9 +86,9 @@ export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: n
             <button
               key={r.id}
               type="button"
-              onClick={() => setRange(r.id)}
+              onClick={() => setRange(r)}
               className={`rounded-md px-3 py-1 text-[12px] font-semibold ${
-                range === r.id
+                range.id === r.id
                   ? "bg-(--color-surface) text-(--color-fg) shadow-xs"
                   : "text-(--color-fg-subtle) hover:text-(--color-fg-muted)"
               }`}
