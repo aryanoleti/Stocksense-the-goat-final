@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const repo = "stocksense-the-goat";
+const repo = "Stocksense-the-goat-final";
 
 const nextConfig: NextConfig = {
   output: "export",
