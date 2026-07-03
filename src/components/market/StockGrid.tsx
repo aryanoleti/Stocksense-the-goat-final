@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search, Filter } from "lucide-react";
 import { NIFTY_50, SECTORS } from "@/lib/mock-data";
-import { useLivePrices } from "@/lib/use-live-prices";
+import { useUniversePrices } from "@/lib/live-universe-store";
 import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
 
@@ -21,7 +21,7 @@ export function StockGrid() {
   const [sort, setSort] = useState<string>("symbol");
   const [q, setQ] = useState("");
 
-  const prices = useLivePrices(NIFTY_50.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const prices = useUniversePrices();
 
   const filtered = useMemo(() => {
     const lower = q.trim().toLowerCase();

@@ -2,21 +2,21 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Moon, Sun } from "lucide-react";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { useTheme } from "@/lib/theme/ThemeProvider";
 
 const links = [
   { href: "/#features", label: "Features" },
-  { href: "/#stats", label: "Numbers" },
-  { href: "/#testimonials", label: "Stories" },
   { href: "/#faq", label: "FAQ" },
 ];
 
 export function MarketingNav() {
   const [open, setOpen] = useState(false);
   const { user, openSignIn } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   return (
     <header className="sticky top-0 z-40 w-full">
       <div className="mx-auto max-w-7xl px-5 py-4">
@@ -34,6 +34,15 @@ export function MarketingNav() {
             ))}
           </nav>
           <div className="hidden items-center gap-2 md:flex">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="grid h-9 w-9 place-items-center rounded-xl text-white/80 hover:bg-white/10 hover:text-white"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+            </button>
             {user ? (
               <Button href="/dashboard" size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
                 Open dashboard

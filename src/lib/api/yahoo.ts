@@ -51,15 +51,21 @@ export function yahooSymbol(symbol: string): string {
   return `${symbol}.NS`;
 }
 
+const FETCH_TIMEOUT_MS = 8_000;
+
 async function fetchProxied(url: string): Promise<Response> {
   let lastErr: unknown;
   for (const wrap of PROXIES) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const r = await fetch(wrap(url), { cache: "no-store" });
+      const r = await fetch(wrap(url), { cache: "no-store", signal: controller.signal });
       if (r.ok) return r;
       lastErr = new Error(`${r.status} ${r.statusText}`);
     } catch (e) {
       lastErr = e;
+    } finally {
+      clearTimeout(timeout);
     }
   }
   throw lastErr ?? new Error("All CORS proxies failed");
@@ -160,9 +166,25 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
   });
 }
 
+const QUOTES_CHUNK_SIZE = 12;
+const QUOTES_CHUNK_DELAY_MS = 250;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetches quotes for a large symbol list in small concurrent chunks rather
+ * than firing hundreds of requests at once — the CORS proxies this relies on
+ * are free/public and rate-limit aggressively under burst load.
+ */
 export async function getQuotes(symbols: string[]): Promise<Record<string, Quote>> {
-  const results = await Promise.all(symbols.map((s) => getQuote(s).then((q) => [s, q] as const)));
   const out: Record<string, Quote> = {};
-  for (const [s, q] of results) if (q) out[s] = q;
+  for (let i = 0; i < symbols.length; i += QUOTES_CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + QUOTES_CHUNK_SIZE);
+    const results = await Promise.all(chunk.map((s) => getQuote(s).then((q) => [s, q] as const)));
+    for (const [s, q] of results) if (q) out[s] = q;
+    if (i + QUOTES_CHUNK_SIZE < symbols.length) await sleep(QUOTES_CHUNK_DELAY_MS);
+  }
   return out;
 }

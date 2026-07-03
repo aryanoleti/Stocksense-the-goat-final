@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { History, ArrowRight } from "lucide-react";
 import { useLivePrices } from "@/lib/use-live-prices";
+import { useRecentlyViewed } from "@/lib/recently-viewed";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { NIFTY_50 } from "@/lib/mock-data";
 import { Delta } from "@/components/ui/Delta";
 import { formatINR } from "@/lib/format";
 
-const RECENT = ["ADANIENT", "SUNPHARMA", "AXISBANK", "BAJFINANCE", "KOTAKBANK", "HCLTECH", "INFY", "TCS", "RELIANCE"];
-
 export default function RecentlyViewedPage() {
-  const list = RECENT.map((sym) => NIFTY_50.find((s) => s.symbol === sym)).filter(Boolean) as typeof NIFTY_50;
+  const { hydrated, symbols } = useRecentlyViewed();
+  const list = symbols.map((sym) => NIFTY_50.find((s) => s.symbol === sym)).filter(Boolean) as typeof NIFTY_50;
   const prices = useLivePrices(list.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
 
   return (
@@ -31,6 +31,15 @@ export default function RecentlyViewedPage() {
         </span>
       </header>
 
+      {hydrated && list.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-(--color-border) bg-(--color-surface) p-14 text-center">
+          <History className="mx-auto h-7 w-7 text-(--color-fg-subtle)" />
+          <p className="mt-3 text-[14.5px] font-semibold text-(--color-fg)">Nothing here yet</p>
+          <p className="mt-1 text-[13px] text-(--color-fg-muted)">
+            Open any stock's detail page and it'll show up here.
+          </p>
+        </div>
+      ) : (
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((s) => {
           const tick = prices[s.symbol];
@@ -63,6 +72,7 @@ export default function RecentlyViewedPage() {
           );
         })}
       </ul>
+      )}
 
       <Card padding="md">
         <CardEyebrow>About this page</CardEyebrow>

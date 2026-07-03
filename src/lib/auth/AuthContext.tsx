@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { decodeGoogleCredential } from "./jwt";
 import type { AuthUser } from "./types";
 import "./types";
@@ -12,6 +13,8 @@ export type AuthContextValue = {
   user: AuthUser | null;
   clientId: string | undefined;
   ready: boolean; // GIS script loaded
+  /** True once we've checked localStorage for an existing session. */
+  hydrated: boolean;
   signOut: () => void;
   openSignIn: () => void;
   /** Internal — called by SignInModal when GIS returns a credential. */
@@ -23,6 +26,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const router = useRouter();
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -33,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (raw) setUser(JSON.parse(raw));
     } catch {
       /* noop */
+    } finally {
+      setHydrated(true);
     }
   }, []);
 
@@ -71,7 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     persist(null);
-  }, [persist]);
+    router.replace("/");
+  }, [persist, router]);
 
   const _setCredential = useCallback(
     (credential: string) => {
@@ -89,8 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, clientId, ready, signOut, openSignIn, _setCredential }),
-    [user, clientId, ready, signOut, openSignIn, _setCredential],
+    () => ({ user, clientId, ready, hydrated, signOut, openSignIn, _setCredential }),
+    [user, clientId, ready, hydrated, signOut, openSignIn, _setCredential],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

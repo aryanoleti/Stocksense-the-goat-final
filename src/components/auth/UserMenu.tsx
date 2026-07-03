@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, User } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 
 export function UserMenu() {
@@ -64,16 +64,6 @@ export function UserMenu() {
             </div>
           </div>
           <ul className="py-1.5">
-            <li>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13.5px] text-(--color-fg) hover:bg-(--color-surface-2)"
-              >
-                <User className="h-3.5 w-3.5 text-(--color-fg-subtle)" />
-                Profile
-              </button>
-            </li>
             <li>
               <button
                 type="button"

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLivePrices } from "@/lib/use-live-prices";
+import { useUniversePrices } from "@/lib/live-universe-store";
 import { NIFTY_50 } from "@/lib/mock-data";
 import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
@@ -14,12 +15,16 @@ type Props = {
 };
 
 export function MoversTable({ title, variant, count = 8, symbols }: Props) {
-  // Stable list — but we use live prices to colour them.
-  const list = symbols
-    ? NIFTY_50.filter((s) => symbols.includes(s.symbol))
-    : pickList(variant, count);
+  // Rank across the full universe so "top gainers/losers" is actually true,
+  // not just a re-sort of an arbitrary fixed slice. Full-universe prices come
+  // from one shared poller (useUniversePrices) rather than each MoversTable
+  // instance fetching all 200+ symbols on its own.
+  const boundedList = symbols ? NIFTY_50.filter((s) => symbols.includes(s.symbol)) : [];
+  const boundedPrices = useLivePrices(boundedList.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const universePrices = useUniversePrices();
 
-  const prices = useLivePrices(list.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const list = symbols ? boundedList : NIFTY_50;
+  const prices = symbols ? boundedPrices : universePrices;
 
   // Re-rank by current change percent
   const ranked = [...list]
@@ -65,10 +70,4 @@ export function MoversTable({ title, variant, count = 8, symbols }: Props) {
       </ul>
     </div>
   );
-}
-
-function pickList(variant: "gainers" | "losers", count: number) {
-  // Pick a representative slice from the universe
-  const offset = variant === "gainers" ? 0 : 25;
-  return NIFTY_50.slice(offset, offset + Math.max(count, 8));
 }

@@ -14,13 +14,15 @@ import {
   BookOpen,
   History,
   ExternalLink,
-  Search,
-  Bell,
   Menu,
   X,
 } from "lucide-react";
 import { Logo, LogoMark } from "./Logo";
+import { TopbarSearch } from "./TopbarSearch";
+import { NotificationsMenu } from "./NotificationsMenu";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { useMarketStatus } from "@/lib/market-hours";
 import { cn } from "@/lib/cn";
 
 const PRIMARY = [
@@ -158,6 +160,7 @@ function SidebarSection({
 }
 
 function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
+  const marketOpen = useMarketStatus();
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-(--color-border) bg-(--color-bg)/85 px-4 backdrop-blur-md md:px-8">
       <button
@@ -172,33 +175,29 @@ function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <LogoMark />
       </div>
       <div className="flex-1 max-w-xl">
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-(--color-fg-subtle)" />
-          <input
-            type="search"
-            placeholder="Search stocks, sectors, or ask the AI…"
-            className="h-10 w-full rounded-xl border border-(--color-border) bg-(--color-surface) pl-10 pr-3 text-sm placeholder:text-(--color-fg-subtle) focus:border-(--color-brand-300) focus:ring-4 focus:ring-(--color-brand-50) focus:outline-none"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10.5px] font-semibold text-(--color-fg-subtle) bg-(--color-surface-2) border border-(--color-border) rounded px-1.5 py-0.5">
-            ⌘K
-          </span>
-        </div>
+        <TopbarSearch />
       </div>
       <div className="flex items-center gap-3">
-        <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-(--color-up)/30 bg-(--color-up-soft) px-2.5 py-1 text-[11px] font-semibold tracking-tight text-(--color-up)">
-          <span className="relative inline-flex h-1.5 w-1.5">
-            <span className="absolute inset-0 rounded-full bg-(--color-up) animate-pulse-dot" />
+        {marketOpen !== null && (
+          <span
+            className={cn(
+              "hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-tight",
+              marketOpen
+                ? "border-(--color-up)/30 bg-(--color-up-soft) text-(--color-up)"
+                : "border-(--color-border-strong) bg-(--color-surface-2) text-(--color-fg-subtle)",
+            )}
+          >
+            <span className="relative inline-flex h-1.5 w-1.5">
+              <span
+                className={cn("absolute inset-0 rounded-full", marketOpen && "animate-pulse-dot")}
+                style={{ background: marketOpen ? "var(--color-up)" : "var(--color-fg-subtle)" }}
+              />
+            </span>
+            {marketOpen ? "Markets open" : "Markets closed"}
           </span>
-          Markets open
-        </span>
-        <button
-          type="button"
-          className="relative grid h-10 w-10 place-items-center rounded-xl border border-(--color-border) bg-(--color-surface) text-(--color-fg-muted) hover:bg-(--color-surface-2)"
-          aria-label="Notifications"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-(--color-brand-500)" />
-        </button>
+        )}
+        <ThemeToggle />
+        <NotificationsMenu />
         <UserMenu />
       </div>
     </header>

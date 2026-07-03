@@ -5,8 +5,9 @@
 const KEY = process.env.NEXT_PUBLIC_GEMINI_KEY;
 const MODEL = "gemini-2.5-flash";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const TIMEOUT_MS = 20_000;
 
-export type GeminiPart = { text: string };
+export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 export type GeminiContent = { role: "user" | "model"; parts: GeminiPart[] };
 
 type GenerateOptions = {
@@ -42,18 +43,42 @@ export async function generate(
   if (opts.system) {
     body.systemInstruction = { role: "system", parts: [{ text: opts.system }] };
   }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const r = await fetch(`${ENDPOINT}?key=${encodeURIComponent(KEY)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: controller.signal,
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => "");
+      console.error(`[gemini] ${r.status} ${r.statusText}`, errBody.slice(0, 2000));
+      return null;
+    }
     const json: GeminiResponse = await r.json();
-    return json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? null;
-  } catch {
+    if (json.promptFeedback?.blockReason) {
+      console.error("[gemini] blocked:", json.promptFeedback.blockReason);
+      return null;
+    }
+    const candidate = json.candidates?.[0];
+    const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? null;
+    if (!text) {
+      console.error("[gemini] empty response, finishReason:", candidate?.finishReason, json);
+      return null;
+    }
+    return text;
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      console.error(`[gemini] request timed out after ${TIMEOUT_MS}ms`);
+    } else {
+      console.error("[gemini] request failed:", err);
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

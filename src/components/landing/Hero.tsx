@@ -35,9 +35,9 @@ export function Hero() {
               No credit card. Virtual portfolio. Real market data.
             </p>
             <dl className="mt-10 grid max-w-md grid-cols-3 gap-6 border-t border-white/10 pt-6">
-              <Stat value="50+" label="Nifty stocks" />
+              <Stat value="200+" label="Indian stocks" />
               <Stat value="₹5L" label="Virtual cash" />
-              <Stat value="1s" label="Price refresh" />
+              <Stat value="Live" label="Price refresh" />
             </dl>
           </div>
           <div className="relative animate-fade-up" style={{ animationDelay: "120ms" }}>

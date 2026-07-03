@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Bookmark, Plus, X, Bell } from "lucide-react";
+import { Bookmark, Plus, X } from "lucide-react";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
@@ -41,7 +41,7 @@ export default function WatchlistPage() {
     const sym = input.trim().toUpperCase();
     if (!sym) return;
     const stock = NIFTY_50.find((s) => s.symbol === sym);
-    if (!stock) return setError(`${sym} is not in our Nifty 50 universe.`);
+    if (!stock) return setError(`${sym} isn't in our tracked stock list.`);
     if (symbols.includes(sym)) return setError(`${sym} is already in your watchlist.`);
     setSymbols((arr) => [...arr, sym]);
     setInput("");
@@ -130,14 +130,6 @@ export default function WatchlistPage() {
                       <p className="text-[15px] font-semibold tabular">₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}</p>
                       <Delta value={tick?.changePct ?? 0} size="xs" />
                     </div>
-                    <button
-                      type="button"
-                      className="hidden sm:grid h-8 w-8 place-items-center rounded-lg border border-(--color-border) bg-(--color-surface) text-(--color-fg-subtle) hover:bg-(--color-brand-50) hover:text-(--color-brand-700)"
-                      title="Alerts"
-                      aria-label="Set alerts"
-                    >
-                      <Bell className="h-3.5 w-3.5" />
-                    </button>
                     <button
                       type="button"
                       onClick={() => remove(s.symbol)}

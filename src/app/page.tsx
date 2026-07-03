@@ -1,8 +1,6 @@
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
-import { Stats } from "@/components/landing/Stats";
-import { Testimonials } from "@/components/landing/Testimonials";
 import { FAQ } from "@/components/landing/FAQ";
 import { CtaBanner } from "@/components/landing/CtaBanner";
 import { Footer } from "@/components/landing/Footer";
@@ -18,8 +16,6 @@ export default function LandingPage() {
         </div>
       </div>
       <Features />
-      <Stats />
-      <Testimonials />
       <FAQ />
       <CtaBanner />
       <Footer />

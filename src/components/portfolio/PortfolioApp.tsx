@@ -136,7 +136,7 @@ export function PortfolioApp() {
     if (!sym) return setError("Enter a ticker symbol.");
     if (!shares || shares <= 0) return setError("Enter a positive number of shares.");
     const stock = NIFTY_50.find((s) => s.symbol === sym);
-    if (!stock) return setError(`${sym} is not in our Nifty 50 universe.`);
+    if (!stock) return setError(`${sym} isn't in our tracked stock list.`);
     const live = livePrices[sym]?.price ?? stock.basePrice;
     const cost = live * shares;
     if (cost > state.cash) return setError(`Need ₹${formatINR(cost)}. You only have ₹${formatINR(state.cash)}.`);

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { X, ShieldCheck, Sparkles, AlertCircle } from "lucide-react";
 import { useAuth, SIGNIN_OPEN_EVENT_NAME } from "@/lib/auth/AuthContext";
 import { LogoMark } from "@/components/layout/Logo";
 
 export function SignInModal() {
   const { clientId, ready, user, _setCredential } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const buttonHostRef = useRef<HTMLDivElement | null>(null);
   const initialisedRef = useRef(false);
@@ -43,7 +45,8 @@ export function SignInModal() {
         client_id: clientId,
         callback: (response) => {
           if (response?.credential) {
-            _setCredential(response.credential);
+            const ok = _setCredential(response.credential);
+            if (ok) router.replace("/dashboard");
           }
         },
         cancel_on_tap_outside: false,
@@ -120,9 +123,7 @@ export function SignInModal() {
         </div>
 
         <div className="border-t border-(--color-border) bg-(--color-surface-2)/60 px-7 py-4 text-[11.5px] text-(--color-fg-subtle)">
-          By signing in you agree to our{" "}
-          <a href="#" className="font-medium text-(--color-fg-muted) hover:text-(--color-fg)">Terms</a> and{" "}
-          <a href="#" className="font-medium text-(--color-fg-muted) hover:text-(--color-fg)">Privacy Policy</a>.
+          StockSense only uses your Google sign-in to identify you — see the &ldquo;Is my data safe?&rdquo; question on the homepage for details.
         </div>
       </div>
     </div>

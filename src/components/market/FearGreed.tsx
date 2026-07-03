@@ -40,7 +40,7 @@ export function FearGreed({ value = 62 }: { value?: number }) {
         {label}
       </p>
       <p className="mt-3 max-w-[260px] text-center text-[12px] leading-relaxed text-(--color-fg-muted)">
-        A composite indicator of market sentiment based on volatility, momentum and breadth.
+        Live market breadth — the share of tracked stocks trading up right now.
       </p>
     </div>
   );

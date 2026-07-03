@@ -20,30 +20,13 @@ const COLUMNS = [
       { label: "Where to buy", href: "/buy-stocks" },
     ],
   },
-  {
-    title: "Company",
-    links: [
-      { label: "About", href: "#" },
-      { label: "Careers", href: "#" },
-      { label: "Press", href: "#" },
-      { label: "Contact", href: "#" },
-    ],
-  },
-  {
-    title: "Legal",
-    links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
-      { label: "Disclaimer", href: "#" },
-    ],
-  },
 ];
 
 export function Footer() {
   return (
     <footer className="border-t border-(--color-border) bg-(--color-surface)">
       <div className="mx-auto max-w-7xl px-5 py-16">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 md:grid-cols-[1.6fr_1fr_1fr]">
           <div>
             <Logo />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-(--color-fg-muted)">

@@ -2,10 +2,10 @@ import { ArrowRight } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { LiveDot } from "@/components/ui/Badge";
 import { IndexCard } from "@/components/market/IndexCard";
-import { IntradayChart } from "@/components/market/IntradayChart";
+import { PriceChart } from "@/components/stock/PriceChart";
 import { SectorBars } from "@/components/market/SectorBars";
 import { MoversTable } from "@/components/market/MoversTable";
-import { FearGreed } from "@/components/market/FearGreed";
+import { MarketFearGreed } from "@/components/market/MarketFearGreed";
 import { INDICES } from "@/lib/mock-data";
 import Link from "next/link";
 
@@ -37,24 +37,11 @@ export default function MarketPage() {
         <Card padding="md">
           <CardHeader>
             <div>
-              <CardTitle>Nifty 50 · Intraday</CardTitle>
-              <p className="mt-1 text-[13.5px] text-(--color-fg)">5-minute candles · NSE</p>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-(--color-border) bg-(--color-surface-2) p-0.5">
-              {["1D", "1W", "1M", "1Y", "5Y"].map((r, i) => (
-                <button
-                  key={r}
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold ${
-                    i === 0 ? "bg-(--color-surface) text-(--color-fg) shadow-xs" : "text-(--color-fg-subtle)"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+              <CardTitle>Nifty 50</CardTitle>
+              <p className="mt-1 text-[13.5px] text-(--color-fg)">NSE · pick a range below</p>
             </div>
           </CardHeader>
-          <IntradayChart symbol={INDICES[0].symbol} base={INDICES[0].base} />
+          <PriceChart symbol={INDICES[0].symbol} basePrice={INDICES[0].base} />
         </Card>
 
         <Card padding="md">
@@ -75,30 +62,16 @@ export default function MarketPage() {
         </div>
         <Card padding="md">
           <CardHeader>
-            <CardTitle>Fear &amp; Greed Index</CardTitle>
+            <CardTitle>Market breadth</CardTitle>
           </CardHeader>
-          <FearGreed value={62} />
-          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-(--color-border) pt-4 text-center">
-            <div>
-              <p className="text-[10.5px] uppercase tracking-[0.12em] text-(--color-fg-subtle)">Yesterday</p>
-              <p className="mt-1 text-[15px] font-semibold tabular">58</p>
-            </div>
-            <div>
-              <p className="text-[10.5px] uppercase tracking-[0.12em] text-(--color-fg-subtle)">1W ago</p>
-              <p className="mt-1 text-[15px] font-semibold tabular">52</p>
-            </div>
-            <div>
-              <p className="text-[10.5px] uppercase tracking-[0.12em] text-(--color-fg-subtle)">1M ago</p>
-              <p className="mt-1 text-[15px] font-semibold tabular">41</p>
-            </div>
-          </div>
+          <MarketFearGreed />
         </Card>
       </section>
 
       <section>
         <Card padding="md" className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Explore all Nifty 50 stocks</CardTitle>
+            <CardTitle>Explore 200+ Indian stocks</CardTitle>
             <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
               Filter by sector, sort by value or momentum, and open AI insights on any company.
             </p>

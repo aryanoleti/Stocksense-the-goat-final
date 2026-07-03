@@ -11,18 +11,22 @@ import {
   YAxis,
 } from "recharts";
 import { getChart, type ChartInterval, type ChartRange } from "@/lib/api/yahoo";
-import { generateForecast, generatePriceHistory } from "@/lib/mock-data";
+import { generateForecast, generatePriceHistory, generateIntraday } from "@/lib/mock-data";
 
-type Range = { id: string; days: number; range: ChartRange; interval: ChartInterval };
+type Range = { id: string; days: number; range: ChartRange; interval: ChartInterval; intraday?: boolean };
 
 const RANGES: Range[] = [
+  { id: "1D", days: 1, range: "1d", interval: "5m", intraday: true },
+  { id: "3D", days: 3, range: "5d", interval: "15m", intraday: true },
   { id: "1W", days: 7, range: "5d", interval: "30m" },
   { id: "1M", days: 30, range: "1mo", interval: "1d" },
   { id: "3M", days: 90, range: "3mo", interval: "1d" },
   { id: "1Y", days: 365, range: "1y", interval: "1d" },
 ];
 
-type HistoryPoint = { date: string; price: number };
+const INTRADAY_REFRESH_MS = 30_000;
+
+type HistoryPoint = { date: string; time: number; price: number };
 
 function formatLabel(time: number, interval: ChartInterval): string {
   const d = new Date(time);
@@ -32,49 +36,88 @@ function formatLabel(time: number, interval: ChartInterval): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
+/** Keep only the most recent `days` distinct trading dates present in the candles. */
+function trimToRecentTradingDays(candles: { time: number; price: number }[], days: number) {
+  const dateKey = (t: number) => new Date(t).toDateString();
+  const uniqueDates = Array.from(new Set(candles.map((c) => dateKey(c.time))));
+  const keep = new Set(uniqueDates.slice(-days));
+  return candles.filter((c) => keep.has(dateKey(c.time)));
+}
+
 export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: number }) {
-  const [range, setRange] = useState<Range>(RANGES[1]);
+  const [range, setRange] = useState<Range>(RANGES[3]); // default to 1M
   const seed = symbol.charCodeAt(0) + symbol.charCodeAt(1);
 
-  const mockHistory = useMemo<HistoryPoint[]>(
-    () => generatePriceHistory(basePrice, range.days, seed),
-    [basePrice, range.days, seed],
-  );
+  const mockHistory = useMemo<HistoryPoint[]>(() => {
+    if (range.intraday) {
+      // Just a brief loading placeholder shape — real data supersedes this almost immediately.
+      return generateIntraday(basePrice, 78, seed).map((p, i) => ({
+        date: p.time,
+        time: Date.now() - (78 - i) * 5 * 60 * 1000,
+        price: p.price,
+      }));
+    }
+    return generatePriceHistory(basePrice, range.days, seed).map((p, i, arr) => ({
+      date: p.date,
+      time: Date.now() - (arr.length - i) * 24 * 60 * 60 * 1000,
+      price: p.price,
+    }));
+  }, [basePrice, range, seed]);
   const [history, setHistory] = useState<HistoryPoint[]>(mockHistory);
 
   useEffect(() => {
     setHistory(mockHistory);
     let cancelled = false;
+
     async function load() {
       const r = await getChart(symbol, range.range, range.interval);
       if (cancelled || !r || r.candles.length === 0) return;
+      const candles = range.id === "3D" ? trimToRecentTradingDays(r.candles, 3) : r.candles;
       setHistory(
-        r.candles.map((c) => ({
+        candles.map((c) => ({
           date: formatLabel(c.time, range.interval),
+          time: c.time,
           price: Math.round(c.price * 100) / 100,
         })),
       );
     }
+
     load();
+    if (range.intraday) {
+      const id = setInterval(load, INTRADAY_REFRESH_MS);
+      return () => {
+        cancelled = true;
+        clearInterval(id);
+      };
+    }
     return () => {
       cancelled = true;
     };
   }, [symbol, range, mockHistory]);
 
   const forecast = useMemo(() => {
+    if (range.intraday) return []; // forecast is a daily-horizon concept, not meaningful on 1D/3D
     const last = history[history.length - 1];
-    return last ? generateForecast(last.price, 7, seed) : [];
-  }, [history, seed]);
+    if (!last) return [];
+    return generateForecast(last.price, 7, seed).map((f, i) => ({
+      date: f.date,
+      time: last.time + (i + 1) * 24 * 60 * 60 * 1000,
+      price: f.price,
+    }));
+  }, [history, seed, range.intraday]);
 
   const data = useMemo(() => {
     if (history.length === 0) return [];
-    const merged: Array<{ date: string; price?: number; forecast?: number }> = history.map((h) => ({
+    const merged: Array<{ date: string; time: number; price?: number; forecast?: number }> = history.map((h) => ({
       date: h.date,
+      time: h.time,
       price: h.price,
     }));
     const last = history[history.length - 1];
-    merged.push({ date: last.date, price: last.price, forecast: last.price });
-    forecast.forEach((f) => merged.push({ date: f.date, forecast: f.price }));
+    if (forecast.length > 0) {
+      merged.push({ date: last.date, time: last.time, price: last.price, forecast: last.price });
+      forecast.forEach((f) => merged.push({ date: f.date, time: f.time, forecast: f.price }));
+    }
     return merged;
   }, [history, forecast]);
 
@@ -98,14 +141,24 @@ export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: n
           ))}
         </div>
         <div className="flex items-center gap-4 text-[12px]">
+          {range.intraday && (
+            <span className="inline-flex items-center gap-1.5 text-(--color-fg-muted)">
+              <span className="relative inline-flex h-1.5 w-1.5">
+                <span className="absolute inset-0 rounded-full bg-(--color-up) animate-pulse-dot" />
+              </span>
+              Live · updates every 30s
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5 text-(--color-fg-muted)">
             <span className="h-2 w-4 rounded-full bg-(--color-brand-700)" />
             Historical price
           </span>
-          <span className="inline-flex items-center gap-1.5 text-(--color-fg-muted)">
-            <span className="inline-block h-2 w-4 rounded-full" style={{ background: "repeating-linear-gradient(90deg, #b27a00 0 4px, transparent 4px 8px)" }} />
-            AI forecast (7 days)
-          </span>
+          {forecast.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-(--color-fg-muted)">
+              <span className="inline-block h-2 w-4 rounded-full" style={{ background: "repeating-linear-gradient(90deg, #b27a00 0 4px, transparent 4px 8px)" }} />
+              AI forecast (7 days)
+            </span>
+          )}
         </div>
       </div>
 
@@ -132,6 +185,17 @@ export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: n
                 padding: "8px 10px",
               }}
               labelStyle={{ color: "var(--color-fg-subtle)", fontSize: 11 }}
+              labelFormatter={(_label, payload) => {
+                const t = payload?.[0]?.payload?.time;
+                if (typeof t !== "number") return _label;
+                return new Date(t).toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              }}
               formatter={(v, n) => [`₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, n === "price" ? "Historical" : "AI forecast"]}
             />
             <Line
@@ -155,14 +219,16 @@ export function PriceChart({ symbol, basePrice }: { symbol: string; basePrice: n
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl bg-(--color-surface-2) p-3 text-[12.5px] text-(--color-fg-muted)">
-        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--color-warn)_18%,white)] text-(--color-warn)">⚠</span>
-        <p>
-          <span className="font-semibold text-(--color-fg)">AI Forecast:</span> the orange dashed line is a simulated
-          7-day price projection generated by an AI based on current momentum and historical patterns. This is for
-          educational purposes only and is not financial advice.
-        </p>
-      </div>
+      {forecast.length > 0 && (
+        <div className="flex items-start gap-2 rounded-xl bg-(--color-surface-2) p-3 text-[12.5px] text-(--color-fg-muted)">
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--color-warn)_18%,white)] text-(--color-warn)">⚠</span>
+          <p>
+            <span className="font-semibold text-(--color-fg)">AI Forecast:</span> the orange dashed line is a simulated
+            7-day price projection generated by an AI based on current momentum and historical patterns. This is for
+            educational purposes only and is not financial advice.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Reveal } from "./Reveal";
 
 const FAQS = [
   {
@@ -11,7 +12,7 @@ const FAQS = [
   },
   {
     q: "How accurate is the live price data?",
-    a: "Prices update every second during market hours and reflect cached NSE data with a small delay. For execution decisions on real money, always confirm with your broker.",
+    a: "Prices update continuously during market hours, sourced from Yahoo Finance with a short delay. For execution decisions on real money, always confirm with your broker.",
   },
   {
     q: "Does the AI tell me which stock to buy?",
@@ -19,7 +20,7 @@ const FAQS = [
   },
   {
     q: "How does the trading simulator work?",
-    a: "Every new account gets ₹5,00,000 in virtual cash. You can buy and sell at live prices, track P&L, allocation and performance versus Nifty 50 — without risking a rupee.",
+    a: "Every new account gets ₹5,00,000 in virtual cash. You can buy and sell at live prices and track your P&L and sector allocation — without risking a rupee.",
   },
   {
     q: "Is StockSense free?",
@@ -27,22 +28,22 @@ const FAQS = [
   },
   {
     q: "Is my data safe?",
-    a: "We store the minimum needed to run your account. We never sell your data and use industry-standard encryption in transit and at rest.",
+    a: "We only ask Google for your name, email and profile picture to sign you in. Your watchlist, portfolio and preferences are stored locally in your own browser — there's no server or database holding your data, and we never sell anything.",
   },
 ];
 
 export function FAQ() {
   return (
-    <section id="faq" className="border-t border-(--color-border) bg-(--color-surface-2)/50">
+    <section id="faq" className="scroll-mt-24 border-t border-(--color-border) bg-(--color-surface-2)/50">
       <div className="mx-auto max-w-3xl px-5 py-24">
-        <div className="text-center">
+        <Reveal className="text-center">
           <p className="text-[11.5px] font-semibold uppercase tracking-[0.18em] text-(--color-brand-700)">
             Questions, answered
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-[42px] sm:leading-[1.08]">
             Frequently asked.
           </h2>
-        </div>
+        </Reveal>
         <ul className="mt-12 divide-y divide-(--color-border) rounded-2xl border border-(--color-border) bg-(--color-surface)">
           {FAQS.map((f, i) => (
             <FaqItem key={f.q} {...f} defaultOpen={i === 0} />
@@ -56,7 +57,7 @@ export function FAQ() {
 function FaqItem({ q, a, defaultOpen }: { q: string; a: string; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
-    <li>
+    <Reveal as="li">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -81,6 +82,6 @@ function FaqItem({ q, a, defaultOpen }: { q: string; a: string; defaultOpen?: bo
           <p className="text-[14.5px] leading-relaxed text-(--color-fg-muted)">{a}</p>
         </div>
       </div>
-    </li>
+    </Reveal>
   );
 }
