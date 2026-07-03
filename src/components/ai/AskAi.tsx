@@ -5,7 +5,7 @@ import { Send, Sparkles, TrendingUp, AlertTriangle, ArrowRight, Bot, ImagePlus, 
 import Link from "next/link";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { useSenseChat, type SenseMessage } from "@/lib/ai/sense-chat-store";
+import { useSenseChat, consumeQueuedPrompt, type SenseMessage } from "@/lib/ai/sense-chat-store";
 import { readImageFile, type ReadImageResult } from "@/lib/ai/read-image-file";
 
 const SUGGESTED = [
@@ -27,6 +27,14 @@ export function AskAi() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, thinking]);
+
+  // If another page queued a prompt (e.g. "Ask AI about RELIANCE") before
+  // navigating here, send it once on mount.
+  useEffect(() => {
+    const queued = consumeQueuedPrompt();
+    if (queued) send(queued);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(prompt: string) {
     const image = pendingImage;

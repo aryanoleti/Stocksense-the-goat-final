@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Sparkles, Newspaper, Filter, ExternalLink, Loader2 } from "lucide-react";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -153,28 +153,37 @@ function NewsItem({ item, defaultOpen }: { item: Article; defaultOpen?: boolean 
   const [open, setOpen] = useState(!!defaultOpen);
   const [aiTake, setAiTake] = useState<string | null>(null);
   const [loadingTake, setLoadingTake] = useState(false);
+  const startedRef = useRef(false);
+  const mountedRef = useRef(true);
   const tone = item.sentiment === "Positive" ? "up" : item.sentiment === "Negative" ? "down" : "neutral";
 
   useEffect(() => {
-    if (!open || aiTake || loadingTake || !hasGeminiKey()) return;
-    let cancelled = false;
-    async function getTake() {
-      setLoadingTake(true);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Fetch the AI "why it matters" once, the first time this card opens.
+  // Guarded by a ref so expand/collapse never re-fires or cancels the request.
+  // (The old [open, aiTake, loadingTake] deps cancelled the call the instant
+  // loading began, leaving it stuck forever on "Asking Gemini…".)
+  useEffect(() => {
+    if (!open || startedRef.current || !hasGeminiKey()) return;
+    startedRef.current = true;
+    setLoadingTake(true);
+    (async () => {
       const prompt = `Write a 2-3 sentence "why it matters" analysis of this news for Indian retail investors. Be specific and balanced; no buy/sell advice.
 
 Headline: ${item.title}
 Summary: ${item.summary}
 Source: ${item.source}`;
       const text = await generate([{ role: "user", parts: [{ text: prompt }] }], { temperature: 0.5 });
-      if (cancelled) return;
+      if (!mountedRef.current) return;
       setAiTake(text ?? "Couldn't generate context for this story right now.");
       setLoadingTake(false);
-    }
-    getTake();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, aiTake, loadingTake, item]);
+    })();
+  }, [open, item.id]);
 
   return (
     <Card padding="none" className="overflow-hidden">

@@ -169,6 +169,21 @@ function reset() {
   setState({ messages: [SEED_MESSAGE], thinking: false });
 }
 
+// A one-shot prompt handoff: pages elsewhere in the app (e.g. a stock detail
+// page's "Ask AI about X" button) queue a prompt, then navigate to /ask-ai,
+// where it's consumed and auto-sent exactly once.
+let queuedPrompt: string | null = null;
+
+export function queuePrompt(text: string) {
+  queuedPrompt = text.trim() || null;
+}
+
+export function consumeQueuedPrompt(): string | null {
+  const q = queuedPrompt;
+  queuedPrompt = null;
+  return q;
+}
+
 export function useSenseChat() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return { messages: snapshot.messages, thinking: snapshot.thinking, send, reset };

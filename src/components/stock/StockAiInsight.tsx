@@ -1,18 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Sparkles, ArrowRight, Bot, TrendingUp, AlertTriangle, Activity, Loader2 } from "lucide-react";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useLivePrice } from "@/lib/use-live-prices";
 import { useStockInsight } from "@/lib/ai/use-stock-insight";
+import { queuePrompt } from "@/lib/ai/sense-chat-store";
 import { hasGeminiKey } from "@/lib/api/gemini";
 import type { Stock } from "@/lib/mock-data";
 
 export function StockAiInsight({ stock }: { stock: Stock }) {
+  const router = useRouter();
   const tick = useLivePrice(stock.symbol, stock.basePrice);
   const { insight, loading, failed } = useStockInsight(stock, tick.changePct);
   const keyMissing = !hasGeminiKey();
+
+  function askAboutStock() {
+    queuePrompt(
+      `Give me an overview of ${stock.name} (${stock.symbol}), an NSE-listed ${stock.sector} stock: how it's been performing recently, its key strengths, and the main risks to watch. Keep it educational, not financial advice.`,
+    );
+    router.push("/ask-ai");
+  }
 
   return (
     <>
@@ -45,7 +55,7 @@ export function StockAiInsight({ stock }: { stock: Stock }) {
             ) : (
               <p className="mt-2 text-[14.5px] leading-relaxed text-(--color-fg)">{insight.summary}</p>
             )}
-            <Button href="/ask-ai" variant="subtle" size="sm" className="mt-4">
+            <Button onClick={askAboutStock} variant="subtle" size="sm" className="mt-4">
               <Bot className="h-3.5 w-3.5" /> Ask AI about {stock.symbol}
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
