@@ -1,5 +1,6 @@
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { Hero } from "@/components/landing/Hero";
+import { TickerStrip } from "@/components/landing/TickerStrip";
 import { Features } from "@/components/landing/Features";
 import { FAQ } from "@/components/landing/FAQ";
 import { CtaBanner } from "@/components/landing/CtaBanner";
@@ -15,6 +16,7 @@ export default function LandingPage() {
           <Hero />
         </div>
       </div>
+      <TickerStrip />
       <Features />
       <FAQ />
       <CtaBanner />
