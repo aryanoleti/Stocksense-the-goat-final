@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { GlossaryAiExplain } from "@/components/learn/GlossaryAiExplain";
 
 const TERMS: { term: string; definition: string; category: string }[] = [
   { term: "Bull Market", category: "Markets", definition: "A period when stock prices are rising or expected to rise. Investors are optimistic." },
@@ -93,6 +94,7 @@ export default function GlossaryPage() {
               </span>
             </div>
             <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-fg-muted)">{t.definition}</p>
+            <GlossaryAiExplain term={t.term} definition={t.definition} />
           </li>
         ))}
       </ul>
