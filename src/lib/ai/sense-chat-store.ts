@@ -59,6 +59,29 @@ You MUST respond with a single JSON object matching this TypeScript type — no 
 
 Always use Indian-context examples and INR. If the user asks about a US stock, return its US ticker in "symbol" only if asked specifically.`;
 
+// User context from onboarding, used to pitch answers at the right level.
+type SenseUserContext = { experience?: string; name?: string };
+let userContext: SenseUserContext | null = null;
+
+export function setSenseUserContext(ctx: SenseUserContext | null) {
+  userContext = ctx;
+}
+
+const EXPERIENCE_GUIDANCE: Record<string, string> = {
+  new: "The user is brand new to stocks — explain simply, define any jargon you use, and don't assume prior knowledge.",
+  learning: "The user is still learning the basics — briefly define key terms as you go.",
+  confident: "The user is fairly confident with investing — you can use standard market terminology.",
+  pro: "The user is an experienced investor — be concise and precise; skip beginner definitions.",
+};
+
+function buildSystemPrompt(): string {
+  const parts = [SYSTEM_PROMPT];
+  if (userContext?.experience && EXPERIENCE_GUIDANCE[userContext.experience]) {
+    parts.push(`\nAbout who you're talking to: ${EXPERIENCE_GUIDANCE[userContext.experience]}`);
+  }
+  return parts.join("");
+}
+
 function findKnownSymbol(text: string): string | undefined {
   const upper = text.toUpperCase();
   return NIFTY_50.find((s) => upper.includes(s.symbol))?.symbol;
@@ -140,7 +163,7 @@ async function send(prompt: string, image?: SenseImage) {
     });
 
   let aiMsg: SenseMessage;
-  const answer = await generateJson<GeminiAnswer>(history, { system: SYSTEM_PROMPT, temperature: 0.55 });
+  const answer = await generateJson<GeminiAnswer>(history, { system: buildSystemPrompt(), temperature: 0.55 });
   if (!answer) {
     aiMsg = fallbackResponse(trimmed);
   } else {

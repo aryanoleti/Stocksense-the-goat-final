@@ -3,11 +3,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { decodeGoogleCredential } from "./jwt";
-import type { AuthUser } from "./types";
+import { registerAccount, signInWithPassword, type AccountResult } from "./accounts";
+import { setSenseUserContext } from "@/lib/ai/sense-chat-store";
+import type { AuthUser, OnboardingProfile } from "./types";
 import "./types";
 
 const STORAGE_KEY = "stocksense.user.v1";
 const SIGNIN_OPEN_EVENT = "stocksense:open-signin";
+
+export type AuthMode = "signin" | "signup";
 
 export type AuthContextValue = {
   user: AuthUser | null;
@@ -16,7 +20,17 @@ export type AuthContextValue = {
   /** True once we've checked localStorage for an existing session. */
   hydrated: boolean;
   signOut: () => void;
-  openSignIn: () => void;
+  /** Open the auth modal, optionally forcing "signin" or "signup". */
+  openSignIn: (mode?: AuthMode) => void;
+  /** Email/password sign-in against a locally-stored account. */
+  signInPassword: (email: string, password: string) => Promise<AccountResult>;
+  /** Create a new local account (with onboarding profile) and sign in. */
+  registerPassword: (
+    email: string,
+    name: string,
+    password: string,
+    profile: OnboardingProfile,
+  ) => Promise<AccountResult>;
   /** Internal — called by SignInModal when GIS returns a credential. */
   _setCredential: (credential: string) => boolean;
 };
@@ -42,6 +56,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHydrated(true);
     }
   }, []);
+
+  // Keep the AI assistant's context in sync with the signed-in user's profile.
+  useEffect(() => {
+    setSenseUserContext(
+      user ? { experience: user.profile?.experience, name: user.givenName ?? user.name } : null,
+    );
+  }, [user]);
 
   // Wait for the GIS script to load
   useEffect(() => {
@@ -85,20 +106,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (credential: string) => {
       const decoded = decodeGoogleCredential(credential);
       if (!decoded) return false;
-      persist(decoded);
+      persist({ ...decoded, provider: "google" });
       return true;
     },
     [persist],
   );
 
-  const openSignIn = useCallback(() => {
+  const signInPassword = useCallback(
+    async (email: string, password: string): Promise<AccountResult> => {
+      const result = await signInWithPassword(email, password);
+      if (result.ok) persist(result.user);
+      return result;
+    },
+    [persist],
+  );
+
+  const registerPassword = useCallback(
+    async (
+      email: string,
+      name: string,
+      password: string,
+      profile: OnboardingProfile,
+    ): Promise<AccountResult> => {
+      const result = await registerAccount(email, name, password, profile);
+      if (result.ok) persist(result.user);
+      return result;
+    },
+    [persist],
+  );
+
+  const openSignIn = useCallback((mode: AuthMode = "signin") => {
     if (typeof window === "undefined") return;
-    window.dispatchEvent(new Event(SIGNIN_OPEN_EVENT));
+    window.dispatchEvent(new CustomEvent(SIGNIN_OPEN_EVENT, { detail: { mode } }));
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, clientId, ready, hydrated, signOut, openSignIn, _setCredential }),
-    [user, clientId, ready, hydrated, signOut, openSignIn, _setCredential],
+    () => ({
+      user,
+      clientId,
+      ready,
+      hydrated,
+      signOut,
+      openSignIn,
+      signInPassword,
+      registerPassword,
+      _setCredential,
+    }),
+    [user, clientId, ready, hydrated, signOut, openSignIn, signInPassword, registerPassword, _setCredential],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,9 +1,28 @@
+export type ExperienceLevel = "new" | "learning" | "confident" | "pro";
+export type RiskComfort = "low" | "medium" | "high";
+
+/** Captured during account creation to tailor AI explanations and content. */
+export type OnboardingProfile = {
+  experience: ExperienceLevel;
+  goals: string[];
+  risk: RiskComfort;
+};
+
 export type AuthUser = {
   sub: string;
   email: string;
   name: string;
   picture: string;
   givenName?: string;
+  provider?: "google" | "password";
+  profile?: OnboardingProfile;
+};
+
+export const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
+  new: "Brand new to stocks",
+  learning: "Still learning the basics",
+  confident: "Fairly confident",
+  pro: "Experienced investor",
 };
 
 export type GoogleCredentialResponse = {

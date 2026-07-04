@@ -21,7 +21,7 @@ export function UserMenu() {
     return (
       <button
         type="button"
-        onClick={openSignIn}
+        onClick={() => openSignIn("signin")}
         className="inline-flex h-10 items-center gap-2 rounded-xl bg-(--color-brand-700) px-4 text-[13px] font-semibold text-white hover:bg-(--color-brand-800)"
       >
         Sign in

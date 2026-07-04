@@ -51,12 +51,12 @@ export function MarketingNav() {
               <>
                 <button
                   type="button"
-                  onClick={openSignIn}
+                  onClick={() => openSignIn("signin")}
                   className="inline-flex h-9 items-center rounded-xl px-3.5 text-sm font-medium text-white hover:bg-white/10"
                 >
                   Sign in
                 </button>
-                <Button href="/dashboard" size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
+                <Button onClick={() => openSignIn("signup")} size="sm" className="bg-white text-(--color-brand-900) hover:bg-white/90 shadow-none">
                   Get started
                 </Button>
               </>
@@ -90,13 +90,20 @@ export function MarketingNav() {
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        openSignIn();
+                        openSignIn("signin");
                       }}
                       className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-white/20 px-3.5 text-sm font-medium text-white"
                     >
                       Sign in
                     </button>
-                    <Button href="/dashboard" size="sm" className="w-full bg-white text-(--color-brand-900) shadow-none">
+                    <Button
+                      onClick={() => {
+                        setOpen(false);
+                        openSignIn("signup");
+                      }}
+                      size="sm"
+                      className="w-full bg-white text-(--color-brand-900) shadow-none"
+                    >
                       Get started
                     </Button>
                   </>
