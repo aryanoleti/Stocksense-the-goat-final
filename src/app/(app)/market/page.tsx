@@ -71,7 +71,7 @@ export default function MarketPage() {
       <section>
         <Card padding="md" className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Explore 200+ Indian stocks</CardTitle>
+            <CardTitle>Explore 500+ Indian stocks</CardTitle>
             <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
               Filter by sector, sort by value or momentum, and open AI insights on any company.
             </p>

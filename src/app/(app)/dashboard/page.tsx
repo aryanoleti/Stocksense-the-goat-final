@@ -29,7 +29,7 @@ export default function DashboardPage() {
             <Greeting fallbackName="there" />
           </h1>
           <p className="mt-2 max-w-xl text-[15px] text-white/70">
-            Track live prices across 200+ Indian stocks, analyse trends, simulate your portfolio and get AI insights — all in one place.
+            Track live prices across 500+ Indian stocks and commodities, analyse trends, simulate your portfolio and get AI insights — all in one place.
           </p>
 
           <div className="mt-7 max-w-3xl">

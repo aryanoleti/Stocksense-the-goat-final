@@ -45,7 +45,7 @@ export function Hero() {
               variants={item}
               className="mt-6 max-w-xl text-base leading-relaxed text-white/70 sm:text-[17px]"
             >
-              Track live prices across 360+ Indian stocks and commodities, analyse companies,
+              Track live prices across 500+ Indian stocks and commodities, analyse companies,
               simulate trades with virtual money, and ask an AI assistant for a second opinion —
               all in one calm, beautiful product.
             </motion.p>
@@ -83,7 +83,7 @@ export function Hero() {
               variants={item}
               className="mt-10 grid max-w-md grid-cols-3 gap-6 border-t border-white/10 pt-6"
             >
-              <Stat value="360+" label="Stocks & ETFs" />
+              <Stat value="500+" label="Stocks & ETFs" />
               <Stat value="₹5L" label="Virtual cash" />
               <Stat value="Live" label="Market data" />
             </motion.dl>

@@ -15,7 +15,7 @@ import { Reveal } from "./Reveal";
 const FEATURES = [
   { icon: Bot, title: "AI Stock Assistant", body: "Conversational research. Ask why a stock moved, compare peers, or get a second opinion before you trade." },
   { icon: Wallet, title: "Trading Simulator", body: "Start with ₹5 lakh of virtual cash. Buy, sell, and learn — without risking a rupee." },
-  { icon: TrendingUp, title: "Live Indian Markets", body: "Nifty 50, Sensex, sector indices and 200+ stocks, with prices that update continuously during market hours." },
+  { icon: TrendingUp, title: "Live Indian Markets", body: "Nifty 50, Sensex, sector indices and 500+ stocks, with prices that update continuously during market hours." },
   { icon: Search, title: "Smart Screener", body: "Filter by sector, search by name or symbol, and sort by gainers, market cap or P/E." },
   { icon: ChartPie, title: "Portfolio Analytics", body: "Allocation, P&L over time, sector exposure — see the shape of your investments at a glance." },
   { icon: Newspaper, title: "Curated News", body: "Headline noise filtered down to what matters, with AI-generated context on demand." },
