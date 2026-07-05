@@ -11,6 +11,7 @@ import {
   LineChart,
 } from "lucide-react";
 import { Reveal } from "./Reveal";
+import { SpotlightCard } from "./SpotlightCard";
 
 const FEATURES = [
   { icon: Bot, title: "AI Stock Assistant", body: "Conversational research. Ask why a stock moved, compare peers, or get a second opinion before you trade." },
@@ -42,17 +43,14 @@ export function Features() {
       </Reveal>
       <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f, i) => (
-          <Reveal
-            key={f.title}
-            as="li"
-            delay={(i % 3) * 0.08}
-            className="group rounded-2xl border border-(--color-border) bg-(--color-surface) p-6 transition-all hover:-translate-y-0.5 hover:border-(--color-brand-300) hover:shadow-[0_18px_40px_-22px_rgba(13,31,23,0.14)]"
-          >
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-(--color-brand-50) text-(--color-brand-700) transition-colors group-hover:bg-(--color-brand-700) group-hover:text-white">
-              <f.icon className="h-[18px] w-[18px]" strokeWidth={2} />
-            </div>
-            <h3 className="mt-5 text-[17px] font-semibold tracking-tight">{f.title}</h3>
-            <p className="mt-2 text-[14.5px] leading-relaxed text-(--color-fg-muted)">{f.body}</p>
+          <Reveal key={f.title} as="li" delay={(i % 3) * 0.08}>
+            <SpotlightCard className="h-full p-6">
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-(--color-brand-50) text-(--color-brand-700) transition-colors group-hover:bg-(--color-brand-700) group-hover:text-white">
+                <f.icon className="h-[18px] w-[18px]" strokeWidth={2} />
+              </div>
+              <h3 className="mt-5 text-[17px] font-semibold tracking-tight">{f.title}</h3>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-(--color-fg-muted)">{f.body}</p>
+            </SpotlightCard>
           </Reveal>
         ))}
       </ul>

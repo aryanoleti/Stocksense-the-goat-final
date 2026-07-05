@@ -1,103 +1,254 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from "framer-motion";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
+import { ArrowDownRight, ArrowUpRight, Sparkles } from "lucide-react";
+import { getChart } from "@/lib/api/yahoo";
+import { NIFTY_50 } from "@/lib/mock-data";
+import { formatINR } from "@/lib/format";
 
-const SERIES = Array.from({ length: 36 }).map((_, i) => ({
-  x: i,
-  y:
-    2200 +
-    Math.sin(i / 3.2) * 24 +
-    Math.cos(i / 5) * 18 +
-    (i / 36) * 60 +
-    (i % 4 === 0 ? 8 : 0),
-}));
+const DEMO_SYMBOLS = ["RELIANCE", "TCS", "HDFCBANK", "INFY"] as const;
+const REFRESH_MS = 20_000;
+
+type DemoStock = (typeof DEMO_SYMBOLS)[number];
+type Point = { t: number; y: number };
+type LiveState = {
+  price: number;
+  changePct: number;
+  dayHigh?: number;
+  dayLow?: number;
+  series: Point[];
+  live: boolean; // true once real API data has arrived
+};
+
+// Deterministic placeholder series so SSR and first client paint match
+// exactly; replaced by real 1D candles as soon as Yahoo responds.
+function fallbackSeries(base: number, seed: number): Point[] {
+  return Array.from({ length: 36 }).map((_, i) => ({
+    t: i,
+    y: base * (1 + Math.sin((i + seed) / 3.2) * 0.004 + Math.cos((i + seed) / 5) * 0.003 + (i / 36) * 0.006),
+  }));
+}
+
+function refFor(sym: DemoStock) {
+  return NIFTY_50.find((s) => s.symbol === sym)!;
+}
+
+function initialState(sym: DemoStock): LiveState {
+  const ref = refFor(sym);
+  return {
+    price: ref.basePrice,
+    changePct: 0,
+    series: fallbackSeries(ref.basePrice, sym.charCodeAt(0)),
+    live: false,
+  };
+}
 
 export function HeroPreview() {
-  const [price, setPrice] = useState(2186.45);
+  const [symbol, setSymbol] = useState<DemoStock>("RELIANCE");
+  const [state, setState] = useState<LiveState>(() => initialState("RELIANCE"));
+  const reduce = useReducedMotion();
+
+  // Pull a real quote + 1D intraday series for the selected stock.
   useEffect(() => {
-    const id = setInterval(() => {
-      setPrice((p) => Math.round((p + (Math.random() - 0.5) * 2.4) * 100) / 100);
-    }, 1200);
-    return () => clearInterval(id);
-  }, []);
+    let cancelled = false;
+    setState(initialState(symbol));
+
+    async function load() {
+      const r = await getChart(symbol, "1d", "5m");
+      if (cancelled || !r) return;
+      setState({
+        price: r.quote.price,
+        changePct: r.quote.changePct,
+        dayHigh: r.quote.dayHigh,
+        dayLow: r.quote.dayLow,
+        series:
+          r.candles.length > 1
+            ? r.candles.map((c) => ({ t: c.time, y: Math.round(c.price * 100) / 100 }))
+            : initialState(symbol).series,
+        live: true,
+      });
+    }
+    load();
+    const id = setInterval(load, REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [symbol]);
+
+  // Cursor-follow tilt. Springs keep it soft; disabled for reduced motion.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const mx = useMotionValue(0.5);
+  const my = useMotionValue(0.5);
+  const rotateX = useSpring(useTransform(my, [0, 1], [7, -7]), { stiffness: 150, damping: 20 });
+  const rotateY = useSpring(useTransform(mx, [0, 1], [-9, 9]), { stiffness: 150, damping: 20 });
+
+  function onMouseMove(e: React.MouseEvent) {
+    if (reduce || !cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    mx.set((e.clientX - rect.left) / rect.width);
+    my.set((e.clientY - rect.top) / rect.height);
+  }
+  function onMouseLeave() {
+    mx.set(0.5);
+    my.set(0.5);
+  }
+
+  const ref = refFor(symbol);
+  const up = state.changePct >= 0;
+  const accent = up ? "#088a52" : "#c4361c";
+
+  const yDomain = useMemo(() => {
+    const ys = state.series.map((p) => p.y);
+    const min = Math.min(...ys);
+    const max = Math.max(...ys);
+    const pad = Math.max((max - min) * 0.15, max * 0.001);
+    return [min - pad, max + pad] as [number, number];
+  }, [state.series]);
+
+  const initials = ref.name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
 
   return (
-    <div className="relative">
-      <div className="absolute -inset-6 -z-10 rounded-[36px] bg-white/5 blur-2xl" />
-      <div className="rounded-[28px] border border-white/12 bg-white/[0.03] p-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.6)] backdrop-blur">
-        <div className="rounded-[22px] bg-white p-5">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div>
+    <div style={{ perspective: 1100 }}>
+      <motion.div
+        ref={cardRef}
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+        style={reduce ? undefined : { rotateX, rotateY, transformStyle: "preserve-3d" }}
+        className="relative"
+      >
+        <div className="absolute -inset-6 -z-10 rounded-[36px] bg-white/5 blur-2xl" />
+        <div className="rounded-[28px] border border-white/12 bg-white/[0.03] p-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.6)] backdrop-blur">
+          <div className="rounded-[22px] bg-white p-5">
+            {/* Stock switcher */}
+            <div className="flex items-center gap-1 rounded-xl bg-[#f4f6f4] p-1">
+              {DEMO_SYMBOLS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSymbol(s)}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-[11.5px] font-semibold tracking-tight transition-colors ${
+                    s === symbol ? "bg-white text-[#0c4a30] shadow-sm" : "text-[#7c8a82] hover:text-[#4a5a51]"
+                  }`}
+                  aria-pressed={s === symbol}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Header */}
+            <div className="mt-4 flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-(--color-brand-50) text-(--color-brand-700) text-[13px] font-semibold">
-                  AE
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#ecf6f0] text-[13px] font-semibold text-[#0c4a30]">
+                  {initials}
                 </span>
                 <div>
-                  <p className="text-[13px] font-semibold text-(--color-fg) leading-tight">Adani Enterprises</p>
-                  <p className="text-[11.5px] text-(--color-fg-subtle) leading-tight">ADANIENT • NSE</p>
+                  <p className="text-[13px] font-semibold leading-tight text-[#0d1f17]">{ref.name}</p>
+                  <p className="text-[11.5px] leading-tight text-[#7c8a82]">{symbol} • NSE</p>
                 </div>
               </div>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                style={{ background: up ? "#e6f4ec" : "#fbece8", color: accent }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: accent }} />
+                {state.live ? "Live" : "Loading"}
+              </span>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-(--color-up-soft) px-2 py-0.5 text-[11px] font-semibold text-(--color-up)">
-              <span className="h-1.5 w-1.5 rounded-full bg-(--color-up) animate-pulse-dot" />
-              Live
-            </span>
-          </div>
 
-          <div className="mt-4 flex items-baseline gap-3">
-            <p className="text-[34px] font-semibold tabular tracking-tight text-(--color-fg)">
-              ₹{price.toFixed(2)}
-            </p>
-            <span className="inline-flex items-center gap-0.5 text-[13px] font-semibold text-(--color-up) tabular">
-              <ArrowUpRight className="h-3.5 w-3.5" /> +2.18%
-            </span>
-          </div>
-
-          {/* Chart */}
-          <div className="mt-3 h-32">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={SERIES} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="hpFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#115e3c" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#115e3c" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <YAxis domain={["dataMin - 10", "dataMax + 10"]} hide />
-                <Area
-                  type="monotone"
-                  dataKey="y"
-                  stroke="#115e3c"
-                  strokeWidth={2}
-                  fill="url(#hpFill)"
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Bottom info */}
-          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-(--color-border) pt-3 text-center">
-            <Mini label="Market cap" value="₹2.52L Cr" />
-            <Mini label="P/E" value="71.2" />
-            <Mini label="52W high" value="₹3,257" />
-          </div>
-
-          {/* AI strip */}
-          <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-(--color-brand-50) p-3">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-(--color-brand-700)" />
-            <div>
-              <p className="text-[12px] font-semibold text-(--color-brand-800)">AI snapshot</p>
-              <p className="mt-0.5 text-[11.5px] leading-snug text-(--color-brand-800)/85">
-                Momentum positive in last 7 sessions. Watch ₹2,210 as immediate support.
+            <div className="mt-3 flex items-baseline gap-3">
+              <p className="text-[34px] font-semibold tabular tracking-tight text-[#0d1f17]">
+                ₹{formatINR(state.price, { decimals: 2 })}
               </p>
+              <span className="inline-flex items-center gap-0.5 text-[13px] font-semibold tabular" style={{ color: accent }}>
+                {up ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                {up ? "+" : ""}
+                {state.changePct.toFixed(2)}%
+              </span>
+            </div>
+
+            {/* Chart — hover for exact time + price */}
+            <div className="mt-3 h-32">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={state.series} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="hpFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={accent} stopOpacity={0.26} />
+                      <stop offset="100%" stopColor={accent} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <YAxis domain={yDomain} hide />
+                  <Tooltip
+                    cursor={{ stroke: "#d2d9d3", strokeDasharray: "3 3" }}
+                    contentStyle={{
+                      border: "1px solid #e3e8e4",
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      padding: "6px 9px",
+                      background: "#ffffff",
+                      color: "#0d1f17",
+                    }}
+                    labelFormatter={(t) =>
+                      state.live
+                        ? new Date(Number(t)).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                        : ""
+                    }
+                    formatter={(v) => [`₹${formatINR(Number(v), { decimals: 2 })}`, symbol]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="y"
+                    stroke={accent}
+                    strokeWidth={2}
+                    fill="url(#hpFill)"
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Reference fundamentals */}
+            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#e3e8e4] pt-3 text-center">
+              <Mini label="Market cap" value={`₹${formatINR(ref.marketCap, { decimals: 0 })} Cr`} />
+              <Mini label="P/E" value={ref.peRatio.toFixed(1)} />
+              <Mini label="52W high" value={`₹${formatINR(ref.week52High, { decimals: 0 })}`} />
+            </div>
+
+            {/* Today, computed from the live quote — no canned analysis */}
+            <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-[#ecf6f0] p-3">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#0c4a30]" />
+              <div>
+                <p className="text-[12px] font-semibold text-[#093a26]">Today</p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-[#093a26]/85">
+                  {state.live ? (
+                    <>
+                      {symbol} is {up ? "up" : "down"} {Math.abs(state.changePct).toFixed(2)}% today
+                      {state.dayLow != null && state.dayHigh != null && (
+                        <>
+                          {" "}
+                          · day range ₹{formatINR(state.dayLow, { decimals: 0 })}–₹
+                          {formatINR(state.dayHigh, { decimals: 0 })}
+                        </>
+                      )}
+                      . Sign in to ask the AI about it.
+                    </>
+                  ) : (
+                    "Fetching the live quote — this card is the real product, not a mock-up."
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -105,8 +256,8 @@ export function HeroPreview() {
 function Mini({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.12em] text-(--color-fg-subtle)">{label}</p>
-      <p className="mt-0.5 text-[12.5px] font-semibold tabular text-(--color-fg)">{value}</p>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[#7c8a82]">{label}</p>
+      <p className="mt-0.5 text-[12.5px] font-semibold tabular text-[#0d1f17]">{value}</p>
     </div>
   );
 }

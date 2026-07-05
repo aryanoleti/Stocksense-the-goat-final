@@ -1,9 +1,11 @@
 // Yahoo Finance client. No key. Routed through corsproxy.io because Yahoo's
 // public endpoints don't set Access-Control-Allow-Origin for browsers.
 
+// allorigins first — it's the one that reliably answers; corsproxy.io moved to
+// a `?url=` format and sits behind Cloudflare, so it's fallback only.
 const PROXIES = [
-  (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
 ];
 
 export type Quote = {
@@ -51,7 +53,7 @@ export function yahooSymbol(symbol: string): string {
   return `${symbol}.NS`;
 }
 
-const FETCH_TIMEOUT_MS = 8_000;
+const FETCH_TIMEOUT_MS = 12_000;
 
 async function fetchProxied(url: string): Promise<Response> {
   let lastErr: unknown;
@@ -136,9 +138,9 @@ export async function getChart(
 
   return once(`chart:${key}`, async () => {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-        ysym,
-      )}?range=${range}&interval=${interval}&includePrePost=false`;
+      // Raw symbol — fetchProxied encodes the whole URL once for the proxy;
+      // pre-encoding here would double-encode symbols like M&M.NS or ^NSEI.
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?range=${range}&interval=${interval}&includePrePost=false`;
       const r = await fetchProxied(url);
       const json: { chart: { result?: YahooChartResult[]; error?: { description?: string } } } =
         await r.json();
@@ -166,25 +168,99 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
   });
 }
 
-const QUOTES_CHUNK_SIZE = 12;
-const QUOTES_CHUNK_DELAY_MS = 250;
+const SPARK_CHUNK_SIZE = 40;
+const SPARK_CHUNK_DELAY_MS = 300;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Yahoo's spark endpoint returns data for MANY symbols in a single request —
+// the only way batch quoting survives free public CORS proxies, which
+// rate-limit per request. Live response shape (verified) is a flat map:
+//   { "TCS.NS": { symbol, timestamp[], close[], previousClose, chartPreviousClose } }
+// Older/enveloped deployments return { spark: { result: [{ symbol, response: [chartResult] }] } }.
+type SparkFlat = {
+  symbol?: string;
+  timestamp?: number[];
+  close?: (number | null)[];
+  previousClose?: number;
+  chartPreviousClose?: number;
+};
+type SparkEnvelope = {
+  spark?: { result?: Array<{ symbol: string; response?: YahooChartResult[] }> };
+} & Record<string, unknown>;
+
+function sparkEntries(json: SparkEnvelope): Array<[string, unknown]> {
+  if (json.spark?.result) {
+    return json.spark.result
+      .filter((r) => r.response?.[0])
+      .map((r) => [r.symbol, r.response![0]] as [string, unknown]);
+  }
+  return Object.entries(json).filter(
+    ([, v]) => typeof v === "object" && v !== null && ("close" in v || "meta" in v),
+  );
+}
+
+function quoteFromSpark(app: string, entry: unknown): Quote | null {
+  if (!entry || typeof entry !== "object") return null;
+  const e = entry as Partial<YahooChartResult> & SparkFlat;
+  if (e.meta && e.indicators) {
+    try {
+      return parseChart(app, e as YahooChartResult).quote;
+    } catch {
+      return null;
+    }
+  }
+  const closes = (e.close ?? []).filter((c): c is number => c != null);
+  const price = closes.length > 0 ? closes[closes.length - 1] : undefined;
+  const prev = e.chartPreviousClose ?? e.previousClose ?? price;
+  if (price == null || prev == null) return null;
+  const change = price - prev;
+  return {
+    symbol: app,
+    price,
+    previousClose: prev,
+    change,
+    changePct: prev ? (change / prev) * 100 : 0,
+    currency: "INR",
+  };
+}
+
 /**
- * Fetches quotes for a large symbol list in small concurrent chunks rather
- * than firing hundreds of requests at once — the CORS proxies this relies on
- * are free/public and rate-limit aggressively under burst load.
+ * Batch quotes via /v8/finance/spark — one proxied request per ~40 symbols
+ * instead of one per symbol. Missing/failed symbols are simply absent from
+ * the result; callers keep their previous values.
  */
 export async function getQuotes(symbols: string[]): Promise<Record<string, Quote>> {
+  const bySpark = new Map<string, string>(); // yahoo symbol -> app symbol
+  for (const s of symbols) bySpark.set(yahooSymbol(s), s);
+  const ysyms = [...bySpark.keys()];
+
   const out: Record<string, Quote> = {};
-  for (let i = 0; i < symbols.length; i += QUOTES_CHUNK_SIZE) {
-    const chunk = symbols.slice(i, i + QUOTES_CHUNK_SIZE);
-    const results = await Promise.all(chunk.map((s) => getQuote(s).then((q) => [s, q] as const)));
-    for (const [s, q] of results) if (q) out[s] = q;
-    if (i + QUOTES_CHUNK_SIZE < symbols.length) await sleep(QUOTES_CHUNK_DELAY_MS);
+  for (let i = 0; i < ysyms.length; i += SPARK_CHUNK_SIZE) {
+    const chunk = ysyms.slice(i, i + SPARK_CHUNK_SIZE);
+    try {
+      // Raw commas/symbols here — fetchProxied encodes the entire URL exactly
+      // once for the proxy's ?url= param; pre-encoding would double-encode.
+      const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${chunk.join(
+        ",",
+      )}&range=1d&interval=15m&includePrePost=false`;
+      const r = await fetchProxied(url);
+      const json: SparkEnvelope = await r.json();
+      for (const [ysym, entry] of sparkEntries(json)) {
+        const app = bySpark.get(ysym);
+        if (!app) continue;
+        const quote = quoteFromSpark(app, entry);
+        if (quote) {
+          out[app] = quote;
+          quoteCache.set(ysym, { at: Date.now(), value: quote });
+        }
+      }
+    } catch {
+      /* whole chunk failed — callers retry on their next interval */
+    }
+    if (i + SPARK_CHUNK_SIZE < ysyms.length) await sleep(SPARK_CHUNK_DELAY_MS);
   }
   return out;
 }
