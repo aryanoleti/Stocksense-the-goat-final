@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Search, Filter } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, Filter, Loader2 } from "lucide-react";
 import { SECTORS, UNIVERSE } from "@/lib/universe";
-import { coverageOf, useUniversePrices } from "@/lib/live-universe-store";
+import { coverageOf, requestQuotes, useUniversePrices } from "@/lib/live-universe-store";
 import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
 
@@ -14,7 +14,7 @@ const SORTS = [
   { id: "losers", label: "Top losers" },
 ];
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 120;
 
 export function StockGrid() {
   const [sector, setSector] = useState<string>("All");
@@ -73,6 +73,54 @@ export function StockGrid() {
 
   const page = ranked.slice(0, visible);
 
+  // Infinite scroll: a sentinel well below the fold keeps revealing more
+  // rows before the user reaches the bottom — no button, one smooth scroll.
+  // IntersectionObserver is the primary trigger; a passive scroll/resize
+  // check is the belt-and-braces fallback for environments that throttle IO.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const hasMore = ranked.length > visible;
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+
+    const LOOKAHEAD_PX = 1600; // start loading ~2 screens ahead
+
+    let pending = false;
+    function loadMore() {
+      if (pending) return;
+      pending = true;
+      setVisible((v) => v + PAGE_SIZE);
+    }
+    function checkProximity() {
+      const rect = el!.getBoundingClientRect();
+      if (rect.top < window.innerHeight + LOOKAHEAD_PX) loadMore();
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      { rootMargin: `${LOOKAHEAD_PX}px 0px` },
+    );
+    io.observe(el);
+    window.addEventListener("scroll", checkProximity, { passive: true });
+    window.addEventListener("resize", checkProximity);
+    checkProximity(); // short first page on a tall screen shouldn't need a scroll
+    return () => {
+      io.disconnect();
+      window.removeEventListener("scroll", checkProximity);
+      window.removeEventListener("resize", checkProximity);
+    };
+  }, [hasMore, visible]);
+
+  // Whatever is (about to be) on screen jumps the polling queue, so prices
+  // for the visible rows land in seconds instead of waiting for the
+  // alphabetical sweep to reach them.
+  const pageSymbolsKey = page.map((s) => s.symbol).join(",");
+  useEffect(() => {
+    if (pageSymbolsKey) requestQuotes(pageSymbolsKey.split(","));
+  }, [pageSymbolsKey]);
+
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 sm:p-5">
@@ -126,15 +174,10 @@ export function StockGrid() {
         })}
       </div>
 
-      {ranked.length > visible && (
-        <div className="text-center">
-          <button
-            type="button"
-            onClick={() => setVisible((v) => v + PAGE_SIZE * 2)}
-            className="rounded-xl border border-(--color-border) bg-(--color-surface) px-5 py-2.5 text-[13px] font-semibold text-(--color-fg) transition-colors hover:border-(--color-brand-300) hover:bg-(--color-surface-2)"
-          >
-            Show more ({(ranked.length - visible).toLocaleString("en-IN")} remaining)
-          </button>
+      {hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-6 text-[12.5px] text-(--color-fg-subtle)">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Loading more of {ranked.length.toLocaleString("en-IN")} stocks…
         </div>
       )}
 
