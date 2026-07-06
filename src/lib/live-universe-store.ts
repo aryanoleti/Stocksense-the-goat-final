@@ -12,8 +12,8 @@ export type Tick = { price: number; change: number; changePct: number };
 // the front of POLL_ORDER, so movers/breadth/heatmap fill within seconds
 // while the long tail streams in behind them.
 const SLICE_SIZE = 100;
-const SLICE_GAP_MS = 2_500;
-const SWEEP_PAUSE_MS = 90_000;
+const SLICE_GAP_MS = 2_000;
+const SWEEP_PAUSE_MS = 45_000;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -93,7 +93,7 @@ export function useUniversePrices() {
 // push them through here for immediate fetching. Deduped against fresh data
 // and against symbols already queued.
 
-const ON_DEMAND_TTL_MS = 60_000;
+const ON_DEMAND_TTL_MS = 15_000;
 let demandQueue: string[] = [];
 const queued = new Set<string>();
 let demandRunning = false;

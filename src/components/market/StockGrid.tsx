@@ -115,10 +115,19 @@ export function StockGrid() {
 
   // Whatever is (about to be) on screen jumps the polling queue, so prices
   // for the visible rows land in seconds instead of waiting for the
-  // alphabetical sweep to reach them.
+  // alphabetical sweep to reach them — and keep refreshing every ~15s while
+  // the user stays on the page.
   const pageSymbolsKey = page.map((s) => s.symbol).join(",");
   useEffect(() => {
-    if (pageSymbolsKey) requestQuotes(pageSymbolsKey.split(","));
+    if (!pageSymbolsKey) return;
+    const syms = pageSymbolsKey.split(",");
+    requestQuotes(syms);
+    // The recurring hot-refresh covers a bounded window (the background sweep
+    // keeps the rest current) so a fully-expanded grid doesn't hammer the
+    // proxies with the whole exchange every cycle.
+    const hot = syms.slice(0, 300);
+    const id = setInterval(() => requestQuotes(hot), 16_000);
+    return () => clearInterval(id);
   }, [pageSymbolsKey]);
 
   return (

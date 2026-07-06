@@ -5,8 +5,8 @@ import { getQuote, getQuotes, type Quote } from "@/lib/api/yahoo";
 
 export type Tick = { price: number; change: number; changePct: number };
 
-const SINGLE_REFRESH_MS = 15_000;
-const BATCH_REFRESH_MS = 30_000;
+const SINGLE_REFRESH_MS = 10_000;
+const BATCH_REFRESH_MS = 20_000;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;

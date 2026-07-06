@@ -19,7 +19,7 @@ type Item = { symbol: string; price: number | null; delta: number | null };
 
 const INITIAL: Item[] = PICKS.map((sym) => ({ symbol: sym, price: null, delta: null }));
 
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 30_000;
 
 export function TickerStrip() {
   const [items, setItems] = useState<Item[]>(INITIAL);

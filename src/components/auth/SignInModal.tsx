@@ -33,12 +33,15 @@ const RISKS: { value: RiskComfort; title: string; sub: string }[] = [
 const EXPERIENCE_ORDER: ExperienceLevel[] = ["new", "learning", "confident", "pro"];
 
 export function SignInModal() {
-  const { clientId, ready, user, _setCredential, signInPassword, registerPassword } = useAuth();
+  const { clientId, ready, user, _setCredential, signInPassword, registerPassword, updateProfile } = useAuth();
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [signupStep, setSignupStep] = useState<0 | 1>(0);
+  // True while a freshly Google-authenticated user is answering onboarding —
+  // keeps the modal open even though `user` is already set.
+  const [googleOnboarding, setGoogleOnboarding] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -55,6 +58,7 @@ export function SignInModal() {
   const initialisedRef = useRef(false);
 
   function resetForm() {
+    setGoogleOnboarding(false);
     setSignupStep(0);
     setName("");
     setEmail("");
@@ -78,10 +82,11 @@ export function SignInModal() {
     return () => window.removeEventListener(SIGNIN_OPEN_EVENT_NAME, onOpen);
   }, []);
 
-  // Close automatically once signed in
+  // Close automatically once signed in — unless we're mid-onboarding for a
+  // brand-new Google account.
   useEffect(() => {
-    if (user) setOpen(false);
-  }, [user]);
+    if (user && !googleOnboarding) setOpen(false);
+  }, [user, googleOnboarding]);
 
   // Close on Escape
   useEffect(() => {
@@ -102,8 +107,18 @@ export function SignInModal() {
         client_id: clientId,
         callback: (response) => {
           if (response?.credential) {
-            const ok = _setCredential(response.credential);
-            if (ok) router.replace("/dashboard");
+            const res = _setCredential(response.credential);
+            if (!res.ok) return;
+            if (res.hasProfile) {
+              router.replace("/dashboard");
+            } else {
+              // First Google sign-up: collect the onboarding profile so
+              // Sense can tailor its answers, then head to the dashboard.
+              setGoogleOnboarding(true);
+              setMode("signup");
+              setSignupStep(1);
+              setError(null);
+            }
           }
         },
         cancel_on_tap_outside: false,
@@ -156,6 +171,16 @@ export function SignInModal() {
     if (!experience) return setError("Pick the option that best describes you.");
     if (!risk) return setError("Choose how you feel about risk.");
     setError(null);
+
+    if (googleOnboarding) {
+      // Google already authenticated the user — just attach the profile.
+      updateProfile({ experience, goals, risk });
+      setGoogleOnboarding(false);
+      setOpen(false);
+      router.replace("/dashboard");
+      return;
+    }
+
     setBusy(true);
     const result = await registerPassword(email, name, password, {
       experience,
@@ -212,9 +237,17 @@ export function SignInModal() {
               setRisk={setRisk}
               busy={busy}
               error={error}
+              backLabel={googleOnboarding ? "Skip for now" : "Back"}
               onBack={() => {
                 setError(null);
-                setSignupStep(0);
+                if (googleOnboarding) {
+                  // Signed in either way — profile can be added later.
+                  setGoogleOnboarding(false);
+                  setOpen(false);
+                  router.replace("/dashboard");
+                } else {
+                  setSignupStep(0);
+                }
               }}
               onSubmit={handleCreateAccount}
             />
@@ -344,6 +377,7 @@ function OnboardingStep({
   setRisk,
   busy,
   error,
+  backLabel = "Back",
   onBack,
   onSubmit,
 }: {
@@ -355,6 +389,7 @@ function OnboardingStep({
   setRisk: (v: RiskComfort) => void;
   busy: boolean;
   error: string | null;
+  backLabel?: string;
   onBack: () => void;
   onSubmit: () => void;
 }) {
@@ -369,7 +404,7 @@ function OnboardingStep({
         onClick={onBack}
         className="inline-flex items-center gap-1 text-[12.5px] font-medium text-(--color-fg-muted) hover:text-(--color-fg)"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back
+        <ArrowLeft className="h-3.5 w-3.5" /> {backLabel}
       </button>
       <h2 className="mt-3 text-[24px] font-semibold tracking-[-0.02em] text-(--color-fg)">
         A couple of quick questions.

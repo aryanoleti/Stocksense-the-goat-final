@@ -9,7 +9,29 @@ import type { AuthUser, OnboardingProfile } from "./types";
 import "./types";
 
 const STORAGE_KEY = "stocksense.user.v1";
+// Onboarding profiles keyed by email, so Google users keep their profile
+// across sign-outs (password accounts already store theirs in accounts.v1).
+const PROFILES_KEY = "stocksense.profiles.v1";
 const SIGNIN_OPEN_EVENT = "stocksense:open-signin";
+
+function loadProfiles(): Record<string, OnboardingProfile> {
+  try {
+    const raw = window.localStorage.getItem(PROFILES_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, OnboardingProfile>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveProfile(email: string, profile: OnboardingProfile) {
+  try {
+    const all = loadProfiles();
+    all[email.toLowerCase()] = profile;
+    window.localStorage.setItem(PROFILES_KEY, JSON.stringify(all));
+  } catch {
+    /* noop */
+  }
+}
 
 export type AuthMode = "signin" | "signup";
 
@@ -31,8 +53,13 @@ export type AuthContextValue = {
     password: string,
     profile: OnboardingProfile,
   ) => Promise<AccountResult>;
-  /** Internal — called by SignInModal when GIS returns a credential. */
-  _setCredential: (credential: string) => boolean;
+  /** Attach/replace the onboarding profile on the signed-in user. */
+  updateProfile: (profile: OnboardingProfile) => void;
+  /**
+   * Internal — called by SignInModal when GIS returns a credential.
+   * `hasProfile` tells the modal whether onboarding is still needed.
+   */
+  _setCredential: (credential: string) => { ok: boolean; hasProfile: boolean };
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -105,11 +132,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const _setCredential = useCallback(
     (credential: string) => {
       const decoded = decodeGoogleCredential(credential);
-      if (!decoded) return false;
-      persist({ ...decoded, provider: "google" });
-      return true;
+      if (!decoded) return { ok: false, hasProfile: false };
+      // Returning Google users pick their onboarding profile back up.
+      const known = loadProfiles()[decoded.email?.toLowerCase() ?? ""];
+      persist({ ...decoded, provider: "google", profile: known });
+      return { ok: true, hasProfile: !!known };
     },
     [persist],
+  );
+
+  const updateProfile = useCallback(
+    (profile: OnboardingProfile) => {
+      setUser((current) => {
+        if (!current) return current;
+        const next = { ...current, profile };
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          /* noop */
+        }
+        saveProfile(current.email, profile);
+        return next;
+      });
+    },
+    [],
   );
 
   const signInPassword = useCallback(
@@ -150,9 +196,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       openSignIn,
       signInPassword,
       registerPassword,
+      updateProfile,
       _setCredential,
     }),
-    [user, clientId, ready, hydrated, signOut, openSignIn, signInPassword, registerPassword, _setCredential],
+    [user, clientId, ready, hydrated, signOut, openSignIn, signInPassword, registerPassword, updateProfile, _setCredential],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

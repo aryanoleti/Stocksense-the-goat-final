@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { PortfolioSummaryCard } from "@/components/portfolio/PortfolioSummaryCard";
 import { RecentlyViewedStrip } from "@/components/market/RecentlyViewedStrip";
 import { BlueChipsList } from "@/components/market/BlueChipsList";
+import { AiMarketBrief } from "@/components/ai/AiMarketBrief";
 import { INDICES, UNIVERSE_COUNT_LABEL } from "@/lib/universe";
 
 const SHORTCUTS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BHARTIARTL", "TATAMOTORS"];
@@ -51,9 +52,12 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* AI market brief */}
+      <AiMarketBrief />
+
       {/* Indices */}
       <section>
-        <SectionHeader title="Markets at a glance" subtitle="Major Indian indices, updating live" />
+        <SectionHeader title="Markets at a glance" subtitle="Major Indian indices, updating live — click any card for the full chart" />
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {INDICES.slice(0, 4).map((i, idx) => (
             <IndexCard key={i.symbol} symbol={i.symbol} name={i.name} highlight={idx === 0} />

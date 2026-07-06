@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLivePrice } from "@/lib/use-live-prices";
 import { getChart } from "@/lib/api/yahoo";
@@ -43,8 +44,9 @@ export function IndexCard({ symbol, name, highlight }: Props) {
   const up = (tick?.changePct ?? 0) >= 0;
   const color = up ? "#088a52" : "#c4361c";
   return (
-    <div
-      className={`group relative overflow-hidden rounded-2xl border bg-(--color-surface) p-5 transition-all ${
+    <Link
+      href={`/indices/${symbol}`}
+      className={`group relative block overflow-hidden rounded-2xl border bg-(--color-surface) p-5 transition-all hover:-translate-y-0.5 hover:border-(--color-brand-300) hover:shadow-[0_18px_38px_-22px_rgba(13,31,23,0.18)] ${
         highlight ? "border-(--color-brand-300) shadow-[0_18px_38px_-22px_rgba(13,31,23,0.18)]" : "border-(--color-border)"
       }`}
     >
@@ -96,6 +98,6 @@ export function IndexCard({ symbol, name, highlight }: Props) {
           </ResponsiveContainer>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
