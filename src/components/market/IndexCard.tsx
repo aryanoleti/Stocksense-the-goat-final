@@ -10,8 +10,6 @@ import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 type Props = {
   symbol: string;
   name: string;
-  base: number;
-  volatility?: number;
   highlight?: boolean;
 };
 
@@ -39,10 +37,10 @@ function useIntradaySpark(symbol: string) {
   return data;
 }
 
-export function IndexCard({ symbol, name, base, volatility = 0.0018, highlight }: Props) {
-  const tick = useLivePrice(symbol, base, volatility);
+export function IndexCard({ symbol, name, highlight }: Props) {
+  const tick = useLivePrice(symbol);
   const data = useIntradaySpark(symbol);
-  const up = tick.changePct >= 0;
+  const up = (tick?.changePct ?? 0) >= 0;
   const color = up ? "#088a52" : "#c4361c";
   return (
     <div
@@ -59,20 +57,21 @@ export function IndexCard({ symbol, name, base, volatility = 0.0018, highlight }
         </div>
         <span
           className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-semibold tracking-tight"
-          style={{
-            background: up ? "var(--color-up-soft)" : "var(--color-down-soft)",
-            color,
-          }}
+          style={
+            tick
+              ? { background: up ? "var(--color-up-soft)" : "var(--color-down-soft)", color }
+              : { background: "var(--color-surface-2)", color: "var(--color-fg-subtle)" }
+          }
         >
-          <span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: color }} />
-          Live
+          <span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: tick ? color : "var(--color-fg-subtle)" }} />
+          {tick ? "Live" : "Loading"}
         </span>
       </div>
       <p className="mt-3 text-[26px] font-semibold tabular tracking-tight text-(--color-fg)">
-        {formatINR(tick.price, { decimals: 2 })}
+        {tick ? formatINR(tick.price, { decimals: 2 }) : "—"}
       </p>
-      <div className="mt-1">
-        <DeltaValue value={tick.change} pct={tick.changePct} />
+      <div className="mt-1 h-5">
+        {tick && <DeltaValue value={tick.change} pct={tick.changePct} />}
       </div>
       <div className="-mx-2 mt-2 h-14">
         {data.length > 1 && (

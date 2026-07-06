@@ -7,7 +7,7 @@ import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { Delta } from "@/components/ui/Delta";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { getStock, UNIVERSE, type Stock } from "@/lib/universe";
 import { useLivePrices } from "@/lib/use-live-prices";
 import { formatINR } from "@/lib/format";
 
@@ -32,15 +32,15 @@ export default function WatchlistPage() {
     } catch {}
   }, [symbols]);
 
-  const list = symbols.map((sym) => NIFTY_50.find((s) => s.symbol === sym)).filter(Boolean) as typeof NIFTY_50;
-  const prices = useLivePrices(list.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const list = symbols.map((sym) => getStock(sym)).filter(Boolean) as Stock[];
+  const prices = useLivePrices(list.map((s) => s.symbol));
 
   function add(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     const sym = input.trim().toUpperCase();
     if (!sym) return;
-    const stock = NIFTY_50.find((s) => s.symbol === sym);
+    const stock = getStock(sym);
     if (!stock) return setError(`${sym} isn't in our tracked stock list.`);
     if (symbols.includes(sym)) return setError(`${sym} is already in your watchlist.`);
     setSymbols((arr) => [...arr, sym]);
@@ -60,7 +60,7 @@ export default function WatchlistPage() {
           </p>
           <h1 className="mt-1 text-[28px] font-semibold tracking-tight">Stocks worth watching</h1>
           <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
-            Track the stocks you care about. Prices update every second during market hours.
+            Track the stocks you care about, with live NSE prices.
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-[12px] font-medium text-(--color-fg-muted)">
@@ -82,7 +82,14 @@ export default function WatchlistPage() {
               list="ss-watchlist-tickers"
             />
             <datalist id="ss-watchlist-tickers">
-              {NIFTY_50.map((s) => (
+              {(input.trim()
+                ? UNIVERSE.filter(
+                    (s) =>
+                      s.symbol.startsWith(input.trim().toUpperCase()) ||
+                      s.name.toLowerCase().includes(input.trim().toLowerCase()),
+                  ).slice(0, 25)
+                : []
+              ).map((s) => (
                 <option key={s.symbol} value={s.symbol}>{s.name}</option>
               ))}
             </datalist>
@@ -127,8 +134,10 @@ export default function WatchlistPage() {
                   </Link>
                   <div className="flex items-center gap-5">
                     <div className="text-right">
-                      <p className="text-[15px] font-semibold tabular">₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}</p>
-                      <Delta value={tick?.changePct ?? 0} size="xs" />
+                      <p className="text-[15px] font-semibold tabular">
+                        {tick ? `₹${formatINR(tick.price, { decimals: 2 })}` : "—"}
+                      </p>
+                      {tick && <Delta value={tick.changePct} size="xs" />}
                     </div>
                     <button
                       type="button"

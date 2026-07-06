@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft, Sparkles } from "lucide-react";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { UNIVERSE } from "@/lib/universe";
 
 export function SearchHero() {
   const [q, setQ] = useState("");
@@ -14,7 +14,7 @@ export function SearchHero() {
   const results = useMemo(() => {
     if (!q.trim()) return [];
     const lower = q.toLowerCase();
-    return NIFTY_50.filter(
+    return UNIVERSE.filter(
       (s) =>
         s.symbol.toLowerCase().includes(lower) ||
         s.name.toLowerCase().includes(lower) ||
@@ -57,7 +57,7 @@ export function SearchHero() {
                     <p className="text-[13.5px] font-semibold tracking-tight text-(--color-fg)">{r.symbol}</p>
                     <p className="text-[11.5px] text-(--color-fg-subtle)">{r.name} • {r.sector}</p>
                   </div>
-                  <span className="text-[12px] tabular text-(--color-fg-muted)">₹{r.basePrice.toFixed(2)}</span>
+                  <span className="rounded-full bg-(--color-surface-2) px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-(--color-fg-muted)">NSE</span>
                 </Link>
               </li>
             ))}

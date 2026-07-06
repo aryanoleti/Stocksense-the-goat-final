@@ -169,6 +169,17 @@ body {
     background-size: 56px 56px;
     mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
   }
+
+  /* Faint particle-dust texture — echoes the hero's particle field on flat
+     surfaces (CTA banner, footer) so the visual language bookends the page. */
+  .particle-dust {
+    background-image:
+      radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1.5px),
+      radial-gradient(rgba(126, 240, 187, 0.12) 1px, transparent 1.5px);
+    background-size: 34px 34px, 56px 56px;
+    background-position: 0 0, 17px 23px;
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 100%, black 20%, transparent 80%);
+  }
 }
 
 button, a, [role="button"], input, select, textarea {

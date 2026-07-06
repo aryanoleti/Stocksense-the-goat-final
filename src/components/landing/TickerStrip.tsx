@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getQuotes } from "@/lib/api/yahoo";
-import { NIFTY_50 } from "@/lib/mock-data";
 
-// A seamless marquee of real tickers. Server markup uses reference prices with
-// flat deltas (deterministic — no hydration mismatch); real quotes hydrate in
-// after mount. Hovering pauses the strip; clicking opens the stock (which asks
-// visitors to sign in first — that's the funnel).
+// A seamless marquee of real tickers. Server markup shows "—" placeholders
+// (deterministic — no hydration mismatch, no reference prices); real quotes
+// hydrate in after mount. Hovering pauses the strip; clicking opens the stock
+// (which asks visitors to sign in first — that's the funnel).
 const PICKS = [
   "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
   "ITC", "LT", "TATAMOTORS", "MARUTI", "SUNPHARMA", "ADANIENT", "TITAN",
@@ -16,12 +15,9 @@ const PICKS = [
   "GOLDBEES", "SILVERBEES",
 ];
 
-type Item = { symbol: string; price: number; delta: number | null };
+type Item = { symbol: string; price: number | null; delta: number | null };
 
-const INITIAL: Item[] = PICKS.map((sym) => {
-  const s = NIFTY_50.find((x) => x.symbol === sym);
-  return s ? { symbol: s.symbol, price: s.basePrice, delta: null } : null;
-}).filter(Boolean) as Item[];
+const INITIAL: Item[] = PICKS.map((sym) => ({ symbol: sym, price: null, delta: null }));
 
 const REFRESH_MS = 60_000;
 
@@ -72,7 +68,9 @@ export function TickerStrip() {
               title={`Open ${it.symbol}`}
             >
               <span className="font-semibold tracking-tight text-(--color-fg)">{it.symbol}</span>
-              <span className="tabular text-(--color-fg-muted)">₹{it.price.toLocaleString("en-IN")}</span>
+              <span className="tabular text-(--color-fg-muted)">
+                {it.price != null ? `₹${it.price.toLocaleString("en-IN")}` : "—"}
+              </span>
               {it.delta == null ? (
                 <span className="tabular text-(--color-fg-subtle)">—</span>
               ) : (

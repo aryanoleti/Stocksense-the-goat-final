@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { generateJson } from "@/lib/api/gemini";
-import type { Stock } from "@/lib/mock-data";
+import { getQuote } from "@/lib/api/yahoo";
+import type { Stock } from "@/lib/universe";
 
 export type StockInsight = {
   summary: string;
@@ -15,25 +16,24 @@ export type StockInsight = {
 // re-spend a Gemini call for the same stock in the same session.
 const cache = new Map<string, StockInsight>();
 
-function buildPrompt(stock: Stock, changePct: number) {
+// The prompt is grounded ONLY in live market data fetched moments before the
+// call — never in stored figures that could have gone stale.
+function buildPrompt(stock: Stock, live: string) {
   return `Give a brief AI-generated analysis of this NSE-listed Indian stock for a retail investor. Educational tone, never explicit buy/sell advice.
 
 Company: ${stock.name} (${stock.symbol})
 Sector: ${stock.sector}
-Price: ₹${stock.basePrice} (today: ${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)
-P/E: ${stock.peRatio}, EPS: ₹${stock.eps}, Beta: ${stock.beta}, Dividend yield: ${stock.dividendYield}%
-52W range: ₹${stock.week52Low}–₹${stock.week52High}
-
+${live}${stock.about ? `Background: ${stock.about}\n` : ""}
 Respond with a single JSON object, no markdown, no prose outside the JSON, matching this TypeScript type:
 {
-  "summary": string,          // 2-3 sentence plain-English summary grounded in the numbers above
+  "summary": string,          // 2-3 sentence plain-English summary grounded in the data above and what you know of the company
   "confidence": number,       // 0-100, how confident you are in this read
   "opportunities": string[],  // up to 3 short upside points, specific to this company/sector
   "risks": string[]           // up to 3 short downside points, specific to this company/sector
 }`;
 }
 
-export function useStockInsight(stock: Stock, changePct: number) {
+export function useStockInsight(stock: Stock) {
   const [insight, setInsight] = useState<StockInsight | null>(cache.get(stock.symbol) ?? null);
   const [loading, setLoading] = useState(!cache.has(stock.symbol));
   const [failed, setFailed] = useState(false);
@@ -51,10 +51,19 @@ export function useStockInsight(stock: Stock, changePct: number) {
     setLoading(true);
     setFailed(false);
 
-    generateJson<StockInsight>(
-      [{ role: "user", parts: [{ text: buildPrompt(stock, changePct) }] }],
-      { temperature: 0.5 },
-    ).then((result) => {
+    (async () => {
+      // Ground the analysis in the real quote of the moment.
+      const q = await getQuote(stock.symbol);
+      if (cancelled) return;
+      const live = q
+        ? `Live price: ₹${q.price.toFixed(2)} (today: ${q.changePct >= 0 ? "+" : ""}${q.changePct.toFixed(2)}%)
+${q.fiftyTwoWeekLow != null && q.fiftyTwoWeekHigh != null ? `52W range: ₹${q.fiftyTwoWeekLow}–₹${q.fiftyTwoWeekHigh}\n` : ""}${q.volume != null ? `Today's volume: ${q.volume.toLocaleString("en-IN")}\n` : ""}`
+        : "Live quote unavailable right now — do not invent price figures; keep the summary qualitative.\n";
+
+      const result = await generateJson<StockInsight>(
+        [{ role: "user", parts: [{ text: buildPrompt(stock, live) }] }],
+        { temperature: 0.5 },
+      );
       if (cancelled) return;
       if (result) {
         cache.set(stock.symbol, result);
@@ -63,13 +72,12 @@ export function useStockInsight(stock: Stock, changePct: number) {
         setFailed(true);
       }
       setLoading(false);
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-    // Only re-run when the symbol changes — the day's changePct fluctuates
-    // constantly and shouldn't re-trigger a fresh AI call on every tick.
+    // Re-run only when the symbol changes, not on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stock.symbol]);
 

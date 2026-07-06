@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLivePrices } from "@/lib/use-live-prices";
 import { useUniversePrices } from "@/lib/live-universe-store";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { getStock, UNIVERSE } from "@/lib/universe";
 import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
 
@@ -15,21 +15,20 @@ type Props = {
 };
 
 export function MoversTable({ title, variant, count = 8, symbols }: Props) {
-  // Rank across the full universe so "top gainers/losers" is actually true,
-  // not just a re-sort of an arbitrary fixed slice. Full-universe prices come
-  // from one shared poller (useUniversePrices) rather than each MoversTable
-  // instance fetching all 200+ symbols on its own.
-  const boundedList = symbols ? NIFTY_50.filter((s) => symbols.includes(s.symbol)) : [];
-  const boundedPrices = useLivePrices(boundedList.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  // Rank across the full universe so "top gainers/losers" is actually true.
+  // Only stocks with a real live quote are ranked — nothing is invented for
+  // symbols the rolling sweep hasn't reached yet.
+  const boundedPrices = useLivePrices(symbols ?? []);
   const universePrices = useUniversePrices();
-
-  const list = symbols ? boundedList : NIFTY_50;
   const prices = symbols ? boundedPrices : universePrices;
+  const list = symbols
+    ? (symbols.map((sym) => getStock(sym)).filter(Boolean) as typeof UNIVERSE)
+    : UNIVERSE;
 
-  // Re-rank by current change percent
-  const ranked = [...list]
-    .map((s) => ({ s, pct: prices[s.symbol]?.changePct ?? 0 }))
-    .sort((a, b) => (variant === "gainers" ? b.pct - a.pct : a.pct - b.pct))
+  const ranked = list
+    .map((s) => ({ s, tick: prices[s.symbol] }))
+    .filter((x) => x.tick)
+    .sort((a, b) => (variant === "gainers" ? b.tick!.changePct - a.tick!.changePct : a.tick!.changePct - b.tick!.changePct))
     .slice(0, count);
 
   return (
@@ -42,10 +41,13 @@ export function MoversTable({ title, variant, count = 8, symbols }: Props) {
           View all →
         </Link>
       </div>
-      <ul>
-        {ranked.map(({ s }) => {
-          const tick = prices[s.symbol];
-          return (
+      {ranked.length === 0 ? (
+        <div className="px-5 py-10 text-center text-[12.5px] text-(--color-fg-muted)">
+          Waiting for live quotes…
+        </div>
+      ) : (
+        <ul>
+          {ranked.map(({ s, tick }) => (
             <li key={s.symbol}>
               <Link
                 href={`/stocks/${s.symbol}`}
@@ -57,17 +59,17 @@ export function MoversTable({ title, variant, count = 8, symbols }: Props) {
                 </div>
                 <div className="flex items-center gap-4 text-right">
                   <p className="text-[13.5px] font-semibold tabular text-(--color-fg)">
-                    ₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}
+                    ₹{formatINR(tick!.price, { decimals: 2 })}
                   </p>
                   <span className="min-w-[64px]">
-                    <Delta value={tick?.changePct ?? 0} size="sm" />
+                    <Delta value={tick!.changePct} size="sm" />
                   </span>
                 </div>
               </Link>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

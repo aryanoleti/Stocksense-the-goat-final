@@ -6,7 +6,7 @@ import { PriceChart } from "@/components/stock/PriceChart";
 import { SectorBars } from "@/components/market/SectorBars";
 import { MoversTable } from "@/components/market/MoversTable";
 import { MarketFearGreed } from "@/components/market/MarketFearGreed";
-import { INDICES } from "@/lib/mock-data";
+import { INDICES } from "@/lib/universe";
 import Link from "next/link";
 
 export default function MarketPage() {
@@ -21,7 +21,7 @@ export default function MarketPage() {
             Market overview
           </h1>
           <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
-            Live NSE & BSE indices, sector pulse, and today&apos;s movers — refreshed every 5 seconds.
+            Live NSE & BSE indices, sector pulse, and today&apos;s movers across the whole exchange.
           </p>
         </div>
         <LiveDot />
@@ -29,7 +29,7 @@ export default function MarketPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {INDICES.slice(0, 4).map((i) => (
-          <IndexCard key={i.symbol} symbol={i.symbol} name={i.name} base={i.base} />
+          <IndexCard key={i.symbol} symbol={i.symbol} name={i.name} />
         ))}
       </section>
 
@@ -41,7 +41,7 @@ export default function MarketPage() {
               <p className="mt-1 text-[13.5px] text-(--color-fg)">NSE · pick a range below</p>
             </div>
           </CardHeader>
-          <PriceChart symbol={INDICES[0].symbol} basePrice={INDICES[0].base} />
+          <PriceChart symbol={INDICES[0].symbol} />
         </Card>
 
         <Card padding="md">
@@ -71,7 +71,7 @@ export default function MarketPage() {
       <section>
         <Card padding="md" className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Explore 500+ Indian stocks</CardTitle>
+            <CardTitle>Explore 2,300+ Indian stocks</CardTitle>
             <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
               Filter by sector, sort by value or momentum, and open AI insights on any company.
             </p>

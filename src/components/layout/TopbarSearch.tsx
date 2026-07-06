@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft, Sparkles, ArrowUpRight, Loader2 } from "lucide-react";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { UNIVERSE } from "@/lib/universe";
 import { useSenseChat } from "@/lib/ai/sense-chat-store";
 
 const AI_PREFIX = /^\/ai\s*/i;
@@ -22,7 +22,7 @@ export function TopbarSearch() {
   const results = useMemo(() => {
     if (isAiMode || !q.trim()) return [];
     const lower = q.toLowerCase();
-    return NIFTY_50.filter(
+    return UNIVERSE.filter(
       (s) =>
         s.symbol.toLowerCase().includes(lower) ||
         s.name.toLowerCase().includes(lower) ||
@@ -124,7 +124,7 @@ export function TopbarSearch() {
                       <p className="text-[13px] font-semibold tracking-tight text-(--color-fg)">{r.symbol}</p>
                       <p className="text-[11px] text-(--color-fg-subtle)">{r.name} • {r.sector}</p>
                     </div>
-                    <span className="text-[11.5px] tabular text-(--color-fg-muted)">₹{r.basePrice.toFixed(2)}</span>
+                    <span className="rounded-full bg-(--color-surface-2) px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-(--color-fg-muted)">NSE</span>
                   </Link>
                 </li>
               ))}

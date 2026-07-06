@@ -5,10 +5,15 @@ import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } fro
 import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { ArrowDownRight, ArrowUpRight, Sparkles } from "lucide-react";
 import { getChart } from "@/lib/api/yahoo";
-import { NIFTY_50 } from "@/lib/mock-data";
 import { formatINR } from "@/lib/format";
 
 const DEMO_SYMBOLS = ["RELIANCE", "TCS", "HDFCBANK", "INFY"] as const;
+const DEMO_NAMES: Record<string, string> = {
+  RELIANCE: "Reliance Industries",
+  TCS: "Tata Consultancy Services",
+  HDFCBANK: "HDFC Bank",
+  INFY: "Infosys",
+};
 const REFRESH_MS = 20_000;
 
 type DemoStock = (typeof DEMO_SYMBOLS)[number];
@@ -18,55 +23,39 @@ type LiveState = {
   changePct: number;
   dayHigh?: number;
   dayLow?: number;
+  week52High?: number;
+  week52Low?: number;
+  previousClose?: number;
   series: Point[];
   live: boolean; // true once real API data has arrived
 };
 
-// Deterministic placeholder series so SSR and first client paint match
-// exactly; replaced by real 1D candles as soon as Yahoo responds.
-function fallbackSeries(base: number, seed: number): Point[] {
-  return Array.from({ length: 36 }).map((_, i) => ({
-    t: i,
-    y: base * (1 + Math.sin((i + seed) / 3.2) * 0.004 + Math.cos((i + seed) / 5) * 0.003 + (i / 36) * 0.006),
-  }));
-}
-
-function refFor(sym: DemoStock) {
-  return NIFTY_50.find((s) => s.symbol === sym)!;
-}
-
-function initialState(sym: DemoStock): LiveState {
-  const ref = refFor(sym);
-  return {
-    price: ref.basePrice,
-    changePct: 0,
-    series: fallbackSeries(ref.basePrice, sym.charCodeAt(0)),
-    live: false,
-  };
-}
+// Nothing renders as data until real data exists — the card opens in a
+// loading state, never on a synthetic curve or a canned price.
+const EMPTY: LiveState = { price: 0, changePct: 0, series: [], live: false };
 
 export function HeroPreview() {
   const [symbol, setSymbol] = useState<DemoStock>("RELIANCE");
-  const [state, setState] = useState<LiveState>(() => initialState("RELIANCE"));
+  const [state, setState] = useState<LiveState>(EMPTY);
   const reduce = useReducedMotion();
 
   // Pull a real quote + 1D intraday series for the selected stock.
   useEffect(() => {
     let cancelled = false;
-    setState(initialState(symbol));
+    setState(EMPTY);
 
     async function load() {
       const r = await getChart(symbol, "1d", "5m");
-      if (cancelled || !r) return;
+      if (cancelled || !r || r.candles.length < 2) return;
       setState({
         price: r.quote.price,
         changePct: r.quote.changePct,
         dayHigh: r.quote.dayHigh,
         dayLow: r.quote.dayLow,
-        series:
-          r.candles.length > 1
-            ? r.candles.map((c) => ({ t: c.time, y: Math.round(c.price * 100) / 100 }))
-            : initialState(symbol).series,
+        week52High: r.quote.fiftyTwoWeekHigh,
+        week52Low: r.quote.fiftyTwoWeekLow,
+        previousClose: r.quote.previousClose,
+        series: r.candles.map((c) => ({ t: c.time, y: Math.round(c.price * 100) / 100 })),
         live: true,
       });
     }
@@ -96,11 +85,12 @@ export function HeroPreview() {
     my.set(0.5);
   }
 
-  const ref = refFor(symbol);
+  const name = DEMO_NAMES[symbol];
   const up = state.changePct >= 0;
   const accent = up ? "#088a52" : "#c4361c";
 
   const yDomain = useMemo(() => {
+    if (state.series.length === 0) return [0, 1] as [number, number];
     const ys = state.series.map((p) => p.y);
     const min = Math.min(...ys);
     const max = Math.max(...ys);
@@ -108,7 +98,7 @@ export function HeroPreview() {
     return [min - pad, max + pad] as [number, number];
   }, [state.series]);
 
-  const initials = ref.name
+  const initials = name
     .split(" ")
     .slice(0, 2)
     .map((w) => w[0])
@@ -151,7 +141,7 @@ export function HeroPreview() {
                   {initials}
                 </span>
                 <div>
-                  <p className="text-[13px] font-semibold leading-tight text-[#0d1f17]">{ref.name}</p>
+                  <p className="text-[13px] font-semibold leading-tight text-[#0d1f17]">{name}</p>
                   <p className="text-[11.5px] leading-tight text-[#7c8a82]">{symbol} • NSE</p>
                 </div>
               </div>
@@ -166,60 +156,64 @@ export function HeroPreview() {
 
             <div className="mt-3 flex items-baseline gap-3">
               <p className="text-[34px] font-semibold tabular tracking-tight text-[#0d1f17]">
-                ₹{formatINR(state.price, { decimals: 2 })}
+                {state.live ? `₹${formatINR(state.price, { decimals: 2 })}` : "—"}
               </p>
-              <span className="inline-flex items-center gap-0.5 text-[13px] font-semibold tabular" style={{ color: accent }}>
-                {up ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                {up ? "+" : ""}
-                {state.changePct.toFixed(2)}%
-              </span>
+              {state.live && (
+                <span className="inline-flex items-center gap-0.5 text-[13px] font-semibold tabular" style={{ color: accent }}>
+                  {up ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                  {up ? "+" : ""}
+                  {state.changePct.toFixed(2)}%
+                </span>
+              )}
             </div>
 
-            {/* Chart — hover for exact time + price */}
+            {/* Chart — hover for exact time + price. Shimmers until real candles land. */}
             <div className="mt-3 h-32">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={state.series} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="hpFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={accent} stopOpacity={0.26} />
-                      <stop offset="100%" stopColor={accent} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <YAxis domain={yDomain} hide />
-                  <Tooltip
-                    cursor={{ stroke: "#d2d9d3", strokeDasharray: "3 3" }}
-                    contentStyle={{
-                      border: "1px solid #e3e8e4",
-                      borderRadius: 10,
-                      fontSize: 11.5,
-                      padding: "6px 9px",
-                      background: "#ffffff",
-                      color: "#0d1f17",
-                    }}
-                    labelFormatter={(t) =>
-                      state.live
-                        ? new Date(Number(t)).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-                        : ""
-                    }
-                    formatter={(v) => [`₹${formatINR(Number(v), { decimals: 2 })}`, symbol]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="y"
-                    stroke={accent}
-                    strokeWidth={2}
-                    fill="url(#hpFill)"
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {!state.live ? (
+                <div className="h-full w-full animate-pulse rounded-xl bg-[#f4f6f4]" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={state.series} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="hpFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={accent} stopOpacity={0.26} />
+                        <stop offset="100%" stopColor={accent} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <YAxis domain={yDomain} hide />
+                    <Tooltip
+                      cursor={{ stroke: "#d2d9d3", strokeDasharray: "3 3" }}
+                      contentStyle={{
+                        border: "1px solid #e3e8e4",
+                        borderRadius: 10,
+                        fontSize: 11.5,
+                        padding: "6px 9px",
+                        background: "#ffffff",
+                        color: "#0d1f17",
+                      }}
+                      labelFormatter={(t) =>
+                        new Date(Number(t)).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                      }
+                      formatter={(v) => [`₹${formatINR(Number(v), { decimals: 2 })}`, symbol]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="y"
+                      stroke={accent}
+                      strokeWidth={2}
+                      fill="url(#hpFill)"
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
-            {/* Reference fundamentals */}
+            {/* Live quote facts — real numbers or nothing */}
             <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#e3e8e4] pt-3 text-center">
-              <Mini label="Market cap" value={`₹${formatINR(ref.marketCap, { decimals: 0 })} Cr`} />
-              <Mini label="P/E" value={ref.peRatio.toFixed(1)} />
-              <Mini label="52W high" value={`₹${formatINR(ref.week52High, { decimals: 0 })}`} />
+              <Mini label="Prev close" value={state.previousClose != null ? `₹${formatINR(state.previousClose, { decimals: 0 })}` : "—"} />
+              <Mini label="52W low" value={state.week52Low != null ? `₹${formatINR(state.week52Low, { decimals: 0 })}` : "—"} />
+              <Mini label="52W high" value={state.week52High != null ? `₹${formatINR(state.week52High, { decimals: 0 })}` : "—"} />
             </div>
 
             {/* Today, computed from the live quote — no canned analysis */}

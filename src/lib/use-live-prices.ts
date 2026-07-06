@@ -5,47 +5,32 @@ import { getQuote, getQuotes, type Quote } from "@/lib/api/yahoo";
 
 export type Tick = { price: number; change: number; changePct: number };
 
-const SINGLE_REFRESH_MS = 10_000;
+const SINGLE_REFRESH_MS = 15_000;
 const BATCH_REFRESH_MS = 30_000;
-const JITTER_MS = 1_500;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function jitter(price: number, prevClose: number, volatility: number): Tick {
-  const drift = (Math.random() - 0.5) * 2 * volatility * price;
-  const next = Math.max(price * 0.998, Math.min(price * 1.002, price + drift));
-  const change = next - prevClose;
-  const changePct = prevClose ? (change / prevClose) * 100 : 0;
-  return { price: round2(next), change: round2(change), changePct: round2(changePct) };
+function toTick(q: Quote): Tick {
+  return { price: round2(q.price), change: round2(q.change), changePct: round2(q.changePct) };
 }
 
 /**
- * Live quote for a single symbol. Pulls from Yahoo every ~10s and jitters
- * around the anchor in between so the value feels live. Falls back silently
- * to the basePrice anchor if the API is unreachable.
+ * Live quote for a single symbol, or null until the first real quote arrives.
+ * Only ever shows values that came from the market — no synthetic movement,
+ * no placeholder prices. Keeps the last real quote if a refresh fails.
  */
-export function useLivePrice(symbol: string, basePrice: number, volatility = 0.0025) {
-  const [tick, setTick] = useState<Tick>({ price: basePrice, change: 0, changePct: 0 });
-  const anchorRef = useRef({ price: basePrice, prevClose: basePrice });
-
-  useEffect(() => {
-    anchorRef.current = { price: basePrice, prevClose: basePrice };
-    setTick({ price: basePrice, change: 0, changePct: 0 });
-  }, [basePrice, symbol]);
+export function useLivePrice(symbol: string): Tick | null {
+  const [tick, setTick] = useState<Tick | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setTick(null);
     async function pull() {
       const q = await getQuote(symbol);
       if (cancelled || !q) return;
-      anchorRef.current = { price: q.price, prevClose: q.previousClose };
-      setTick({
-        price: round2(q.price),
-        change: round2(q.change),
-        changePct: round2(q.changePct),
-      });
+      setTick(toTick(q));
     }
     pull();
     const id = setInterval(pull, SINGLE_REFRESH_MS);
@@ -55,63 +40,35 @@ export function useLivePrice(symbol: string, basePrice: number, volatility = 0.0
     };
   }, [symbol]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      const { price, prevClose } = anchorRef.current;
-      setTick(jitter(price, prevClose, volatility));
-    }, JITTER_MS);
-    return () => clearInterval(id);
-  }, [volatility]);
-
   return tick;
 }
 
 /**
- * Live quotes for a list of symbols. Fetches the full batch every ~30s and
- * jitters each price between refreshes. Symbols missing from the API
- * response keep their basePrice anchor.
+ * Live quotes for a list of symbols. Symbols the API hasn't answered for yet
+ * are simply absent from the map — callers render "—" until data arrives.
  */
-export function useLivePrices(stocks: Array<{ symbol: string; basePrice: number }>) {
-  const [prices, setPrices] = useState<Record<string, Tick>>(() => {
-    const init: Record<string, Tick> = {};
-    for (const s of stocks) init[s.symbol] = { price: s.basePrice, change: 0, changePct: 0 };
-    return init;
-  });
-
-  const anchorsRef = useRef<Record<string, { price: number; prevClose: number }>>({});
-  const stocksRef = useRef(stocks);
+export function useLivePrices(symbols: string[]): Record<string, Tick> {
+  const [prices, setPrices] = useState<Record<string, Tick>>({});
+  const symbolsRef = useRef(symbols);
+  const key = symbols.join(",");
 
   useEffect(() => {
-    stocksRef.current = stocks;
-    // Seed anchors for new symbols using basePrice.
-    for (const s of stocks) {
-      if (!anchorsRef.current[s.symbol]) {
-        anchorsRef.current[s.symbol] = { price: s.basePrice, prevClose: s.basePrice };
-      }
-    }
-  }, [stocks]);
+    symbolsRef.current = key ? key.split(",") : [];
+  }, [key]);
 
   useEffect(() => {
     let cancelled = false;
     async function pull() {
-      const syms = stocksRef.current.map((s) => s.symbol);
+      const syms = symbolsRef.current;
       if (syms.length === 0) return;
-      const quotes: Record<string, Quote> = await getQuotes(syms);
-      if (cancelled) return;
-      setPrices((prev) => {
-        const next: Record<string, Tick> = { ...prev };
-        for (const s of stocksRef.current) {
-          const q = quotes[s.symbol];
-          if (q) {
-            anchorsRef.current[s.symbol] = { price: q.price, prevClose: q.previousClose };
-            next[s.symbol] = {
-              price: round2(q.price),
-              change: round2(q.change),
-              changePct: round2(q.changePct),
-            };
-          }
-        }
-        return next;
+      // Prices paint chunk-by-chunk as the API answers.
+      await getQuotes(syms, (partial) => {
+        if (cancelled) return;
+        setPrices((prev) => {
+          const next = { ...prev };
+          for (const [sym, q] of Object.entries(partial)) next[sym] = toTick(q);
+          return next;
+        });
       });
     }
     pull();
@@ -120,21 +77,7 @@ export function useLivePrices(stocks: Array<{ symbol: string; basePrice: number 
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setPrices((prev) => {
-        const next: Record<string, Tick> = { ...prev };
-        for (const s of stocksRef.current) {
-          const anchor = anchorsRef.current[s.symbol] ?? { price: s.basePrice, prevClose: s.basePrice };
-          next[s.symbol] = jitter(anchor.price, anchor.prevClose, 0.0025);
-        }
-        return next;
-      });
-    }, JITTER_MS);
-    return () => clearInterval(id);
-  }, []);
+  }, [key]);
 
   return prices;
 }

@@ -4,13 +4,13 @@ import Link from "next/link";
 import { History } from "lucide-react";
 import { useRecentlyViewed } from "@/lib/recently-viewed";
 import { useLivePrices } from "@/lib/use-live-prices";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { getStock, type Stock } from "@/lib/universe";
 import { formatINR } from "@/lib/format";
 
 export function RecentlyViewedStrip() {
   const { hydrated, symbols } = useRecentlyViewed(6);
-  const list = symbols.map((sym) => NIFTY_50.find((s) => s.symbol === sym)).filter(Boolean) as typeof NIFTY_50;
-  const prices = useLivePrices(list.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const list = symbols.map((sym) => getStock(sym)).filter(Boolean) as Stock[];
+  const prices = useLivePrices(list.map((s) => s.symbol));
 
   if (!hydrated) return null;
 
@@ -51,7 +51,7 @@ export function RecentlyViewedStrip() {
                 </div>
                 <div className="text-right">
                   <p className="text-[14px] font-semibold tabular">
-                    ₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}
+                    {tick ? `₹${formatINR(tick.price, { decimals: 2 })}` : "—"}
                   </p>
                 </div>
               </Link>

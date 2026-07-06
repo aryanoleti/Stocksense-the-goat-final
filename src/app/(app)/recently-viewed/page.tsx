@@ -5,14 +5,14 @@ import { History, ArrowRight } from "lucide-react";
 import { useLivePrices } from "@/lib/use-live-prices";
 import { useRecentlyViewed } from "@/lib/recently-viewed";
 import { Card, CardEyebrow } from "@/components/ui/Card";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { getStock, type Stock } from "@/lib/universe";
 import { Delta } from "@/components/ui/Delta";
 import { formatINR } from "@/lib/format";
 
 export default function RecentlyViewedPage() {
   const { hydrated, symbols } = useRecentlyViewed();
-  const list = symbols.map((sym) => NIFTY_50.find((s) => s.symbol === sym)).filter(Boolean) as typeof NIFTY_50;
-  const prices = useLivePrices(list.map((s) => ({ symbol: s.symbol, basePrice: s.basePrice })));
+  const list = symbols.map((sym) => getStock(sym)).filter(Boolean) as Stock[];
+  const prices = useLivePrices(list.map((s) => s.symbol));
 
   return (
     <div className="space-y-6">
@@ -60,9 +60,9 @@ export default function RecentlyViewedPage() {
                 </div>
                 <div className="mt-4 flex items-end justify-between">
                   <p className="text-[22px] font-semibold tabular tracking-tight">
-                    ₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}
+                    {tick ? `₹${formatINR(tick.price, { decimals: 2 })}` : "—"}
                   </p>
-                  <Delta value={tick?.changePct ?? 0} />
+                  {tick && <Delta value={tick.changePct} />}
                 </div>
                 <p className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-(--color-brand-700) opacity-0 transition-opacity group-hover:opacity-100">
                   Open detail <ArrowRight className="h-3 w-3" />

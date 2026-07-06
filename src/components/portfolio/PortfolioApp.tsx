@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input, Label } from "@/components/ui/Input";
 import { Delta } from "@/components/ui/Delta";
 import { useLivePrices } from "@/lib/use-live-prices";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { getStock, UNIVERSE } from "@/lib/universe";
 import { formatINR } from "@/lib/format";
 
 const STARTING_CASH = 500000;
@@ -29,24 +29,16 @@ const STORAGE_KEY = "stocksense.portfolio.v1";
 type Position = { symbol: string; shares: number; avgPrice: number };
 type State = { cash: number; positions: Position[]; valueTrend: { t: number; v: number }[] };
 
-const SECTOR_COLORS: Record<string, string> = {
-  Banking: "#115e3c",
-  IT: "#1f7a4f",
-  Energy: "#3d9a6b",
-  Auto: "#b27a00",
-  FMCG: "#6fb98e",
-  Pharma: "#1d6fb8",
-  Infra: "#c4361c",
-  Telecom: "#a6d4b8",
-  Power: "#0c4a30",
-  Metals: "#8c5a00",
-  Finance: "#093a26",
-  Cement: "#7c8a82",
-  Insurance: "#4a5a51",
-  Healthcare: "#088a52",
-  Paints: "#dc6c1c",
-  Consumer: "#d2eadb",
-};
+// Deterministic palette for whatever sectors show up in the portfolio.
+const PALETTE = [
+  "#115e3c", "#b27a00", "#1d6fb8", "#c4361c", "#0c4a30", "#8c5a00",
+  "#088a52", "#dc6c1c", "#3d9a6b", "#4a5a51", "#6fb98e", "#093a26",
+];
+function sectorColor(sector: string): string {
+  let h = 0;
+  for (let i = 0; i < sector.length; i++) h = (h * 31 + sector.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
 
 function loadState(): State {
   if (typeof window === "undefined") return { cash: STARTING_CASH, positions: [], valueTrend: [] };
@@ -85,20 +77,27 @@ export function PortfolioApp() {
     } catch {}
   }, [state]);
 
-  const livePrices = useLivePrices(state.positions.map((p) => {
-    const s = NIFTY_50.find((x) => x.symbol === p.symbol)!;
-    return { symbol: p.symbol, basePrice: s.basePrice };
-  }));
+  // Ticker for the buy form is also polled so buys can execute at a real price.
+  const watchSymbol = getStock(tickerInput.trim().toUpperCase())?.symbol;
+  const polled = useMemo(() => {
+    const syms = state.positions.map((p) => p.symbol);
+    if (watchSymbol && !syms.includes(watchSymbol)) syms.push(watchSymbol);
+    return syms;
+  }, [state.positions, watchSymbol]);
+  const livePrices = useLivePrices(polled);
 
   const enrichedPositions = useMemo(() => {
     return state.positions.map((p) => {
-      const stock = NIFTY_50.find((x) => x.symbol === p.symbol)!;
-      const current = livePrices[p.symbol]?.price ?? stock.basePrice;
+      const stock = getStock(p.symbol);
+      const live = livePrices[p.symbol]?.price;
+      // Without a live quote yet, the position is valued at cost basis (a real
+      // number from the user's own trade) — never at an invented price.
+      const current = live ?? p.avgPrice;
       const invested = p.avgPrice * p.shares;
       const value = current * p.shares;
       const pl = value - invested;
       const plPct = invested ? (pl / invested) * 100 : 0;
-      return { ...p, stock, current, invested, value, pl, plPct };
+      return { ...p, name: stock?.name ?? p.symbol, sector: stock?.sector ?? "Other", hasLive: live != null, current, invested, value, pl, plPct };
     });
   }, [state.positions, livePrices]);
 
@@ -123,7 +122,7 @@ export function PortfolioApp() {
   const allocation = useMemo(() => {
     const bySector: Record<string, number> = {};
     for (const p of enrichedPositions) {
-      bySector[p.stock.sector] = (bySector[p.stock.sector] ?? 0) + p.value;
+      bySector[p.sector] = (bySector[p.sector] ?? 0) + p.value;
     }
     return Object.entries(bySector).map(([sector, v]) => ({ name: sector, value: v }));
   }, [enrichedPositions]);
@@ -135,9 +134,11 @@ export function PortfolioApp() {
     const shares = parseInt(sharesInput, 10);
     if (!sym) return setError("Enter a ticker symbol.");
     if (!shares || shares <= 0) return setError("Enter a positive number of shares.");
-    const stock = NIFTY_50.find((s) => s.symbol === sym);
-    if (!stock) return setError(`${sym} isn't in our tracked stock list.`);
-    const live = livePrices[sym]?.price ?? stock.basePrice;
+    const stock = getStock(sym);
+    if (!stock) return setError(`${sym} isn't an NSE-listed symbol we track.`);
+    const live = livePrices[sym]?.price;
+    if (live == null)
+      return setError(`Waiting for ${sym}'s live price — give it a few seconds and try again.`);
     const cost = live * shares;
     if (cost > state.cash) return setError(`Need ₹${formatINR(cost)}. You only have ₹${formatINR(state.cash)}.`);
 
@@ -160,10 +161,15 @@ export function PortfolioApp() {
   }
 
   function sellAll(symbol: string) {
+    const live = livePrices[symbol]?.price;
+    if (live == null) {
+      setError(`Can't sell ${symbol} without a live price — it'll be available in a few seconds.`);
+      return;
+    }
+    setError(null);
     setState((prev) => {
       const pos = prev.positions.find((p) => p.symbol === symbol);
       if (!pos) return prev;
-      const live = livePrices[symbol]?.price ?? NIFTY_50.find((s) => s.symbol === symbol)!.basePrice;
       const proceeds = pos.shares * live;
       return {
         ...prev,
@@ -228,7 +234,14 @@ export function PortfolioApp() {
                 list="ss-tickers"
               />
               <datalist id="ss-tickers">
-                {NIFTY_50.map((s) => (
+                {(tickerInput.trim()
+                  ? UNIVERSE.filter(
+                      (s) =>
+                        s.symbol.startsWith(tickerInput.trim().toUpperCase()) ||
+                        s.name.toLowerCase().includes(tickerInput.trim().toLowerCase()),
+                    ).slice(0, 25)
+                  : []
+                ).map((s) => (
                   <option key={s.symbol} value={s.symbol}>
                     {s.name}
                   </option>
@@ -320,11 +333,13 @@ export function PortfolioApp() {
                     <tr key={p.symbol} className="border-t border-(--color-border) text-[13.5px] tabular">
                       <td className="px-5 py-3">
                         <p className="font-semibold tracking-tight text-(--color-fg)">{p.symbol}</p>
-                        <p className="text-[11.5px] text-(--color-fg-subtle)">{p.stock.name}</p>
+                        <p className="text-[11.5px] text-(--color-fg-subtle)">{p.name}</p>
                       </td>
                       <td className="px-3 py-3 text-(--color-fg-muted)">{p.shares}</td>
                       <td className="px-3 py-3 text-right text-(--color-fg-muted)">₹{formatINR(p.avgPrice)}</td>
-                      <td className="px-3 py-3 text-right font-semibold text-(--color-fg)">₹{formatINR(p.current)}</td>
+                      <td className="px-3 py-3 text-right font-semibold text-(--color-fg)">
+                        {p.hasLive ? `₹${formatINR(p.current)}` : "—"}
+                      </td>
                       <td className="px-3 py-3 text-right font-semibold text-(--color-fg)">₹{formatINR(p.value)}</td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex flex-col items-end leading-tight">
@@ -370,7 +385,7 @@ export function PortfolioApp() {
                       strokeWidth={2}
                     >
                       {allocation.map((entry, i) => (
-                        <Cell key={i} fill={SECTOR_COLORS[entry.name] ?? "#115e3c"} />
+                        <Cell key={i} fill={sectorColor(entry.name)} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -392,7 +407,7 @@ export function PortfolioApp() {
                   return (
                     <li key={a.name} className="flex items-center justify-between text-[12.5px]">
                       <span className="flex items-center gap-2 text-(--color-fg-muted)">
-                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: SECTOR_COLORS[a.name] ?? "#115e3c" }} />
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: sectorColor(a.name) }} />
                         {a.name}
                       </span>
                       <span className="font-semibold tabular text-(--color-fg)">{pct.toFixed(1)}%</span>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { NIFTY_50 } from "@/lib/mock-data";
 import { useLivePrices } from "@/lib/use-live-prices";
 
 const STORAGE_KEY = "stocksense.portfolio.v1";
@@ -39,20 +38,15 @@ export function usePortfolioSummary() {
     setHydrated(true);
   }, []);
 
-  const livePrices = useLivePrices(
-    state.positions.map((p) => {
-      const s = NIFTY_50.find((x) => x.symbol === p.symbol);
-      return { symbol: p.symbol, basePrice: s?.basePrice ?? p.avgPrice };
-    }),
-  );
+  const livePrices = useLivePrices(state.positions.map((p) => p.symbol));
 
   return useMemo(() => {
     let value = 0;
     let todayChange = 0;
     for (const p of state.positions) {
       const tick = livePrices[p.symbol];
-      const stock = NIFTY_50.find((x) => x.symbol === p.symbol);
-      const current = tick?.price ?? stock?.basePrice ?? p.avgPrice;
+      // Cost basis (the user's own real trade price) until the live quote lands.
+      const current = tick?.price ?? p.avgPrice;
       value += current * p.shares;
       todayChange += (tick?.change ?? 0) * p.shares;
     }

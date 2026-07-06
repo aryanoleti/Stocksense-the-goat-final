@@ -8,10 +8,11 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PortfolioSummaryCard } from "@/components/portfolio/PortfolioSummaryCard";
 import { RecentlyViewedStrip } from "@/components/market/RecentlyViewedStrip";
-import { INDICES, NIFTY_50 } from "@/lib/mock-data";
+import { BlueChipsList } from "@/components/market/BlueChipsList";
+import { INDICES, UNIVERSE_COUNT_LABEL } from "@/lib/universe";
 
 const SHORTCUTS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BHARTIARTL", "TATAMOTORS"];
-const TRENDING = ["ADANIENT", "TATAMOTORS", "SBIN", "ICICIBANK", "RELIANCE", "BHARTIARTL"];
+const BLUE_CHIPS = ["RELIANCE", "HDFCBANK", "TCS", "ICICIBANK", "SBIN", "BHARTIARTL"];
 
 export default function DashboardPage() {
   return (
@@ -29,7 +30,7 @@ export default function DashboardPage() {
             <Greeting fallbackName="there" />
           </h1>
           <p className="mt-2 max-w-xl text-[15px] text-white/70">
-            Track live prices across 500+ Indian stocks and commodities, analyse trends, simulate your portfolio and get AI insights — all in one place.
+            Track live prices across {UNIVERSE_COUNT_LABEL} Indian stocks and commodities, analyse trends, simulate your portfolio and get AI insights — all in one place.
           </p>
 
           <div className="mt-7 max-w-3xl">
@@ -55,7 +56,7 @@ export default function DashboardPage() {
         <SectionHeader title="Markets at a glance" subtitle="Major Indian indices, updating live" />
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {INDICES.slice(0, 4).map((i, idx) => (
-            <IndexCard key={i.symbol} symbol={i.symbol} name={i.name} base={i.base} highlight={idx === 0} />
+            <IndexCard key={i.symbol} symbol={i.symbol} name={i.name} highlight={idx === 0} />
           ))}
         </div>
       </section>
@@ -70,35 +71,12 @@ export default function DashboardPage() {
       <section className="grid gap-5 lg:grid-cols-2">
         <Card padding="none" className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-(--color-border) px-5 py-4">
-            <CardTitle>Trending today</CardTitle>
+            <CardTitle>Blue chips, live</CardTitle>
             <Link href="/market" className="text-[12px] font-medium text-(--color-brand-700) hover:underline">
               Open market →
             </Link>
           </div>
-          <ul>
-            {TRENDING.map((sym, i) => {
-              const stock = NIFTY_50.find((s) => s.symbol === sym)!;
-              return (
-                <li key={sym}>
-                  <Link
-                    href={`/stocks/${sym}`}
-                    className="flex items-center justify-between gap-3 border-b border-(--color-border) px-5 py-3 last:border-b-0 hover:bg-(--color-surface-2)"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-(--color-surface-2) text-[11px] font-semibold text-(--color-fg-muted)">
-                        {i + 1}
-                      </span>
-                      <div>
-                        <p className="text-[13.5px] font-semibold tracking-tight text-(--color-fg)">{sym}</p>
-                        <p className="text-[11.5px] text-(--color-fg-subtle)">{stock.name}</p>
-                      </div>
-                    </div>
-                    <span className="text-[12.5px] tabular text-(--color-fg-muted)">₹{stock.basePrice.toFixed(2)}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <BlueChipsList symbols={BLUE_CHIPS} />
         </Card>
 
         <PortfolioSummaryCard />

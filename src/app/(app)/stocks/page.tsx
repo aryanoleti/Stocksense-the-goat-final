@@ -9,9 +9,10 @@ export default function StocksPage() {
           <p className="text-[11px] uppercase tracking-[0.16em] font-semibold text-(--color-fg-subtle)">
             Stocks
           </p>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">All tracked stocks</h1>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">Every NSE-listed stock</h1>
           <p className="mt-1 text-[13.5px] text-(--color-fg-muted)">
-            500+ Indian stocks with live prices — filter by sector, sort by gainers, market cap or P/E.
+            2,300+ Indian stocks and ETFs with live prices — search the whole exchange, filter by sector,
+            sort by today&apos;s movers.
           </p>
         </div>
         <LiveDot />

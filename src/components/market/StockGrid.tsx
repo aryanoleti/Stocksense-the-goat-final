@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Filter } from "lucide-react";
-import { NIFTY_50, SECTORS } from "@/lib/mock-data";
-import { useUniversePrices } from "@/lib/live-universe-store";
+import { SECTORS, UNIVERSE } from "@/lib/universe";
+import { coverageOf, useUniversePrices } from "@/lib/live-universe-store";
 import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
 
@@ -12,20 +12,22 @@ const SORTS = [
   { id: "symbol", label: "A → Z" },
   { id: "gainers", label: "Top gainers" },
   { id: "losers", label: "Top losers" },
-  { id: "mcap", label: "Market cap" },
-  { id: "pe", label: "P/E" },
 ];
+
+const PAGE_SIZE = 60;
 
 export function StockGrid() {
   const [sector, setSector] = useState<string>("All");
   const [sort, setSort] = useState<string>("symbol");
   const [q, setQ] = useState("");
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   const prices = useUniversePrices();
+  const coverage = coverageOf(prices);
 
   const filtered = useMemo(() => {
     const lower = q.trim().toLowerCase();
-    return NIFTY_50.filter((s) => {
+    return UNIVERSE.filter((s) => {
       if (sector !== "All" && s.sector !== sector) return false;
       if (!lower) return true;
       return (
@@ -40,17 +42,36 @@ export function StockGrid() {
     const arr = [...filtered];
     switch (sort) {
       case "gainers":
-        return arr.sort((a, b) => (prices[b.symbol]?.changePct ?? 0) - (prices[a.symbol]?.changePct ?? 0));
+        // Momentum sorts only make sense for stocks with live data — rank
+        // those first, keep the not-yet-quoted tail alphabetical behind them.
+        return arr.sort((a, b) => {
+          const ta = prices[a.symbol];
+          const tb = prices[b.symbol];
+          if (ta && tb) return tb.changePct - ta.changePct;
+          if (ta) return -1;
+          if (tb) return 1;
+          return a.symbol.localeCompare(b.symbol);
+        });
       case "losers":
-        return arr.sort((a, b) => (prices[a.symbol]?.changePct ?? 0) - (prices[b.symbol]?.changePct ?? 0));
-      case "mcap":
-        return arr.sort((a, b) => b.marketCap - a.marketCap);
-      case "pe":
-        return arr.sort((a, b) => a.peRatio - b.peRatio);
+        return arr.sort((a, b) => {
+          const ta = prices[a.symbol];
+          const tb = prices[b.symbol];
+          if (ta && tb) return ta.changePct - tb.changePct;
+          if (ta) return -1;
+          if (tb) return 1;
+          return a.symbol.localeCompare(b.symbol);
+        });
       default:
         return arr.sort((a, b) => a.symbol.localeCompare(b.symbol));
     }
   }, [filtered, sort, prices]);
+
+  // Reset pagination when the query changes.
+  useEffect(() => {
+    setVisible(PAGE_SIZE);
+  }, [q, sector, sort]);
+
+  const page = ranked.slice(0, visible);
 
   return (
     <div className="space-y-5">
@@ -68,10 +89,16 @@ export function StockGrid() {
           <Select value={sector} onChange={setSector} options={["All", ...SECTORS]} icon={<Filter className="h-4 w-4 text-(--color-fg-subtle)" />} />
           <Select value={sort} onChange={setSort} options={SORTS.map((s) => s.id)} labels={SORTS.reduce((acc, s) => ({ ...acc, [s.id]: s.label }), {} as Record<string, string>)} />
         </div>
+        <p className="mt-3 text-[11.5px] text-(--color-fg-subtle)">
+          {ranked.length.toLocaleString("en-IN")} stocks · live prices for{" "}
+          <span className="tabular">{coverage.live.toLocaleString("en-IN")}</span> of{" "}
+          <span className="tabular">{coverage.total.toLocaleString("en-IN")}</span> and counting — the rest stream in
+          as the rolling sweep reaches them.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {ranked.map((s) => {
+        {page.map((s) => {
           const tick = prices[s.symbol];
           return (
             <Link
@@ -80,24 +107,36 @@ export function StockGrid() {
               className="group rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 transition-all hover:-translate-y-0.5 hover:border-(--color-brand-300) hover:shadow-[0_18px_38px_-22px_rgba(13,31,23,0.14)]"
             >
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-[13.5px] font-semibold tracking-tight text-(--color-fg)">{s.symbol}</p>
-                  <p className="mt-0.5 text-[11.5px] text-(--color-fg-subtle)">{s.name}</p>
+                  <p className="mt-0.5 truncate text-[11.5px] text-(--color-fg-subtle)">{s.name}</p>
                 </div>
-                <span className="rounded-full bg-(--color-surface-2) px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-(--color-fg-muted)">
+                <span className="ml-2 shrink-0 rounded-full bg-(--color-surface-2) px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-(--color-fg-muted)">
                   {s.sector}
                 </span>
               </div>
               <p className="mt-3 text-[20px] font-semibold tabular tracking-tight text-(--color-fg)">
-                ₹{formatINR(tick?.price ?? s.basePrice, { decimals: 2 })}
+                {tick ? `₹${formatINR(tick.price, { decimals: 2 })}` : "—"}
               </p>
-              <div className="mt-1">
-                <Delta value={tick?.changePct ?? 0} />
+              <div className="mt-1 h-5">
+                {tick && <Delta value={tick.changePct} />}
               </div>
             </Link>
           );
         })}
       </div>
+
+      {ranked.length > visible && (
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE_SIZE * 2)}
+            className="rounded-xl border border-(--color-border) bg-(--color-surface) px-5 py-2.5 text-[13px] font-semibold text-(--color-fg) transition-colors hover:border-(--color-brand-300) hover:bg-(--color-surface-2)"
+          >
+            Show more ({(ranked.length - visible).toLocaleString("en-IN")} remaining)
+          </button>
+        </div>
+      )}
 
       {ranked.length === 0 && (
         <div className="rounded-2xl border border-dashed border-(--color-border) bg-(--color-surface) p-12 text-center">

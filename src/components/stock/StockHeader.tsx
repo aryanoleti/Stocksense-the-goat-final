@@ -5,8 +5,8 @@ import { formatINR } from "@/lib/format";
 import { DeltaValue } from "@/components/ui/Delta";
 import { LiveDot } from "@/components/ui/Badge";
 
-export function StockHeader({ symbol, name, sector, basePrice }: { symbol: string; name: string; sector: string; basePrice: number }) {
-  const tick = useLivePrice(symbol, basePrice, 0.0028);
+export function StockHeader({ symbol, name, sector }: { symbol: string; name: string; sector: string }) {
+  const tick = useLivePrice(symbol);
   return (
     <header className="flex flex-wrap items-end justify-between gap-6 rounded-3xl bg-(--color-surface) border border-(--color-border) p-6 sm:p-8">
       <div>
@@ -22,12 +22,23 @@ export function StockHeader({ symbol, name, sector, basePrice }: { symbol: strin
       </div>
       <div className="text-right">
         <LiveDot className="justify-end" />
-        <p className="mt-2 text-[38px] font-semibold tracking-tight tabular text-(--color-fg) sm:text-[44px]">
-          ₹{formatINR(tick.price, { decimals: 2 })}
-        </p>
-        <div className="mt-1">
-          <DeltaValue value={tick.change} pct={tick.changePct} className="text-[14px]" />
-        </div>
+        {tick ? (
+          <>
+            <p className="mt-2 text-[38px] font-semibold tracking-tight tabular text-(--color-fg) sm:text-[44px]">
+              ₹{formatINR(tick.price, { decimals: 2 })}
+            </p>
+            <div className="mt-1">
+              <DeltaValue value={tick.change} pct={tick.changePct} className="text-[14px]" />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-[38px] font-semibold tracking-tight tabular text-(--color-fg-subtle) sm:text-[44px]">
+              —
+            </p>
+            <p className="mt-1 text-[12.5px] text-(--color-fg-subtle)">Fetching live quote…</p>
+          </>
+        )}
       </div>
     </header>
   );

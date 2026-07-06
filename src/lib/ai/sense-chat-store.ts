@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { generateJson, hasGeminiKey, type GeminiContent, type GeminiPart } from "@/lib/api/gemini";
 import { getQuote } from "@/lib/api/yahoo";
-import { NIFTY_50 } from "@/lib/mock-data";
+import { UNIVERSE } from "@/lib/universe";
 
 export type SenseRich = {
   confidence?: number;
@@ -84,21 +84,19 @@ function buildSystemPrompt(): string {
 
 function findKnownSymbol(text: string): string | undefined {
   const upper = text.toUpperCase();
-  return NIFTY_50.find((s) => upper.includes(s.symbol))?.symbol;
+  return UNIVERSE.find((s) => upper.includes(s.symbol))?.symbol;
 }
 
 async function hydrateStockCard(answer: GeminiAnswer): Promise<SenseRich["stock"] | undefined> {
   const sym = answer.symbol?.toUpperCase();
   if (!sym) return undefined;
-  const known = NIFTY_50.find((s) => s.symbol === sym);
+  const known = UNIVERSE.find((s) => s.symbol === sym);
   const name = known?.name ?? sym;
   const quote = await getQuote(sym);
   if (quote) {
     return { symbol: sym, name, price: quote.price, changePct: quote.changePct };
   }
-  if (known) {
-    return { symbol: sym, name: known.name, price: known.basePrice, changePct: 0 };
-  }
+  // No live quote — don't attach a stock card with an invented price.
   return undefined;
 }
 

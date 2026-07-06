@@ -19,6 +19,7 @@ export type Quote = {
   dayLow?: number;
   fiftyTwoWeekHigh?: number;
   fiftyTwoWeekLow?: number;
+  volume?: number;
 };
 
 export type Candle = { time: number; price: number };
@@ -53,16 +54,25 @@ export function yahooSymbol(symbol: string): string {
   return `${symbol}.NS`;
 }
 
-const FETCH_TIMEOUT_MS = 12_000;
+const FETCH_TIMEOUT_MS = 8_000;
+
+// Sticky proxy: once a proxy answers, try it first for subsequent requests.
+// When the preferred one is down (free proxies come and go), we only pay its
+// timeout once instead of on every single chunk.
+let preferredProxy = 0;
 
 async function fetchProxied(url: string): Promise<Response> {
   let lastErr: unknown;
-  for (const wrap of PROXIES) {
+  for (let attempt = 0; attempt < PROXIES.length; attempt++) {
+    const idx = (preferredProxy + attempt) % PROXIES.length;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const r = await fetch(wrap(url), { cache: "no-store", signal: controller.signal });
-      if (r.ok) return r;
+      const r = await fetch(PROXIES[idx](url), { cache: "no-store", signal: controller.signal });
+      if (r.ok) {
+        preferredProxy = idx;
+        return r;
+      }
       lastErr = new Error(`${r.status} ${r.statusText}`);
     } catch (e) {
       lastErr = e;
@@ -92,6 +102,7 @@ type YahooChartResult = {
     regularMarketDayLow?: number;
     fiftyTwoWeekHigh?: number;
     fiftyTwoWeekLow?: number;
+    regularMarketVolume?: number;
   };
   timestamp?: number[];
   indicators: { quote: Array<{ close?: (number | null)[] }> };
@@ -114,6 +125,7 @@ function parseChart(symbol: string, result: YahooChartResult): { quote: Quote; c
     dayLow: meta.regularMarketDayLow,
     fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
     fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+    volume: meta.regularMarketVolume,
   };
   const ts = result.timestamp ?? [];
   const closes = result.indicators.quote[0]?.close ?? [];
@@ -168,7 +180,9 @@ export async function getQuote(symbol: string): Promise<Quote | null> {
   });
 }
 
-const SPARK_CHUNK_SIZE = 40;
+// Yahoo hard-rejects spark requests with more than 20 symbols
+// ("Number of symbols needs to be less than or equal to 20").
+const SPARK_CHUNK_SIZE = 20;
 const SPARK_CHUNK_DELAY_MS = 300;
 
 function sleep(ms: number) {
@@ -228,11 +242,16 @@ function quoteFromSpark(app: string, entry: unknown): Quote | null {
 }
 
 /**
- * Batch quotes via /v8/finance/spark — one proxied request per ~40 symbols
- * instead of one per symbol. Missing/failed symbols are simply absent from
- * the result; callers keep their previous values.
+ * Batch quotes via /v8/finance/spark — one proxied request per 20 symbols
+ * (Yahoo's hard cap) instead of one per symbol. Missing/failed symbols are
+ * simply absent from the result; callers keep their previous values.
+ * `onPartial` fires after each chunk so UIs can paint prices as they stream
+ * in rather than waiting for the whole batch.
  */
-export async function getQuotes(symbols: string[]): Promise<Record<string, Quote>> {
+export async function getQuotes(
+  symbols: string[],
+  onPartial?: (partial: Record<string, Quote>) => void,
+): Promise<Record<string, Quote>> {
   const bySpark = new Map<string, string>(); // yahoo symbol -> app symbol
   for (const s of symbols) bySpark.set(yahooSymbol(s), s);
   const ysyms = [...bySpark.keys()];
@@ -248,15 +267,18 @@ export async function getQuotes(symbols: string[]): Promise<Record<string, Quote
       )}&range=1d&interval=15m&includePrePost=false`;
       const r = await fetchProxied(url);
       const json: SparkEnvelope = await r.json();
+      const partial: Record<string, Quote> = {};
       for (const [ysym, entry] of sparkEntries(json)) {
         const app = bySpark.get(ysym);
         if (!app) continue;
         const quote = quoteFromSpark(app, entry);
         if (quote) {
           out[app] = quote;
+          partial[app] = quote;
           quoteCache.set(ysym, { at: Date.now(), value: quote });
         }
       }
+      if (onPartial && Object.keys(partial).length > 0) onPartial(partial);
     } catch {
       /* whole chunk failed — callers retry on their next interval */
     }

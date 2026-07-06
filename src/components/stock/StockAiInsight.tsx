@@ -5,16 +5,14 @@ import { useRouter } from "next/navigation";
 import { Sparkles, ArrowRight, Bot, TrendingUp, AlertTriangle, Activity, Loader2 } from "lucide-react";
 import { Card, CardEyebrow } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { useLivePrice } from "@/lib/use-live-prices";
 import { useStockInsight } from "@/lib/ai/use-stock-insight";
 import { queuePrompt } from "@/lib/ai/sense-chat-store";
 import { hasGeminiKey } from "@/lib/api/gemini";
-import type { Stock } from "@/lib/mock-data";
+import type { Stock } from "@/lib/universe";
 
 export function StockAiInsight({ stock }: { stock: Stock }) {
   const router = useRouter();
-  const tick = useLivePrice(stock.symbol, stock.basePrice);
-  const { insight, loading, failed } = useStockInsight(stock, tick.changePct);
+  const { insight, loading, failed } = useStockInsight(stock);
   const keyMissing = !hasGeminiKey();
 
   function askAboutStock() {
@@ -92,7 +90,7 @@ export function StockAiInsight({ stock }: { stock: Stock }) {
       )}
 
       <p className="px-1 text-[11px] leading-relaxed text-(--color-fg-subtle)">
-        AI-generated from public fundamentals — not financial advice. <Link href="/ask-ai" className="underline underline-offset-2 hover:text-(--color-fg-muted)">Ask a follow-up →</Link>
+        AI-generated from the live quote and public information — not financial advice. <Link href="/ask-ai" className="underline underline-offset-2 hover:text-(--color-fg-muted)">Ask a follow-up →</Link>
       </p>
     </>
   );

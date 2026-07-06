@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
-import { AnimatedBackdrop } from "./AnimatedBackdrop";
+import { HeroBackdrop } from "./HeroBackdrop";
 import { HeroPreview } from "./HeroPreview";
 
 export function Hero() {
@@ -22,7 +22,7 @@ export function Hero() {
 
   return (
     <section className="relative isolate">
-      <AnimatedBackdrop />
+      <HeroBackdrop />
       <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-(--color-brand-400)/12 blur-3xl" />
       <div className="relative mx-auto max-w-7xl px-5 pt-10 pb-20 sm:pt-16 md:pt-20">
         <div className="grid items-center gap-12 md:grid-cols-[1.05fr_1fr] md:gap-16">
@@ -45,7 +45,7 @@ export function Hero() {
               variants={item}
               className="mt-6 max-w-xl text-base leading-relaxed text-white/70 sm:text-[17px]"
             >
-              Track live prices across 500+ Indian stocks and commodities, analyse companies,
+              Track live prices across every NSE-listed stock — 2,300+ companies and ETFs — analyse them,
               simulate trades with virtual money, and ask an AI assistant for a second opinion —
               all in one calm, beautiful product.
             </motion.p>
@@ -83,7 +83,7 @@ export function Hero() {
               variants={item}
               className="mt-10 grid max-w-md grid-cols-3 gap-6 border-t border-white/10 pt-6"
             >
-              <Stat value="500+" label="Stocks & ETFs" />
+              <Stat value="2,300+" label="Stocks & ETFs" />
               <Stat value="₹5L" label="Virtual cash" />
               <Stat value="Live" label="Market data" />
             </motion.dl>
