@@ -5,21 +5,36 @@ export function Logo({
   className,
   href = "/",
   tone = "light",
+  interactive = true,
 }: {
   className?: string;
   href?: string;
   tone?: "light" | "dark";
+  /** When false, renders a static (non-clickable) wordmark — used inside the
+   *  app shell, where linking to "/" would bounce through a redirect. */
+  interactive?: boolean;
 }) {
   const fg = tone === "dark" ? "text-white" : "text-(--color-fg)";
-  return (
-    <Link
-      href={href}
-      className={cn("inline-flex items-center gap-2.5 font-semibold tracking-tight", fg, className)}
-    >
+  const inner = (
+    <>
       <LogoMark tone={tone} />
       <span className="text-[17px]">
         Stock<span className={tone === "dark" ? "text-(--color-brand-300)" : "text-(--color-brand-600)"}>Sense</span>
       </span>
+    </>
+  );
+  const classes = cn("inline-flex items-center gap-2.5 font-semibold tracking-tight", fg, className);
+
+  if (!interactive) {
+    return (
+      <span className={cn(classes, "select-none")} aria-label="StockSense">
+        {inner}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} className={classes}>
+      {inner}
     </Link>
   );
 }

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useLivePrices } from "@/lib/use-live-prices";
 import { useUniversePrices } from "@/lib/live-universe-store";
 import { getStock, UNIVERSE } from "@/lib/universe";
-import { formatINR } from "@/lib/format";
 import { Delta } from "@/components/ui/Delta";
+import { LivePrice } from "@/components/ui/LivePrice";
 
 type Props = {
   title: string;
@@ -59,7 +59,7 @@ export function MoversTable({ title, variant, count = 8, symbols }: Props) {
                 </div>
                 <div className="flex items-center gap-4 text-right">
                   <p className="text-[13.5px] font-semibold tabular text-(--color-fg)">
-                    ₹{formatINR(tick!.price, { decimals: 2 })}
+                    <LivePrice price={tick!.price} />
                   </p>
                   <span className="min-w-[64px]">
                     <Delta value={tick!.changePct} size="sm" />

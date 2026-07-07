@@ -5,8 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Filter, Loader2 } from "lucide-react";
 import { SECTORS, UNIVERSE } from "@/lib/universe";
 import { coverageOf, requestQuotes, useUniversePrices } from "@/lib/live-universe-store";
-import { formatINR } from "@/lib/format";
+import { useMarketStatus } from "@/lib/market-hours";
 import { Delta } from "@/components/ui/Delta";
+import { LivePrice } from "@/components/ui/LivePrice";
 
 const SORTS = [
   { id: "symbol", label: "A → Z" },
@@ -24,6 +25,7 @@ export function StockGrid() {
 
   const prices = useUniversePrices();
   const coverage = coverageOf(prices);
+  const marketOpen = useMarketStatus();
 
   const filtered = useMemo(() => {
     const lower = q.trim().toLowerCase();
@@ -126,7 +128,7 @@ export function StockGrid() {
     // keeps the rest current) so a fully-expanded grid doesn't hammer the
     // proxies with the whole exchange every cycle.
     const hot = syms.slice(0, 300);
-    const id = setInterval(() => requestQuotes(hot), 16_000);
+    const id = setInterval(() => requestQuotes(hot), 10_000);
     return () => clearInterval(id);
   }, [pageSymbolsKey]);
 
@@ -149,8 +151,12 @@ export function StockGrid() {
         <p className="mt-3 text-[11.5px] text-(--color-fg-subtle)">
           {ranked.length.toLocaleString("en-IN")} stocks · live prices for{" "}
           <span className="tabular">{coverage.live.toLocaleString("en-IN")}</span> of{" "}
-          <span className="tabular">{coverage.total.toLocaleString("en-IN")}</span> and counting — the rest stream in
-          as the rolling sweep reaches them.
+          <span className="tabular">{coverage.total.toLocaleString("en-IN")}</span>
+          {marketOpen === false ? (
+            <> · market closed — showing last-traded prices (they resume moving at 9:15am IST).</>
+          ) : (
+            <> and counting — visible rows refresh every ~10s.</>
+          )}
         </p>
       </div>
 
@@ -173,7 +179,7 @@ export function StockGrid() {
                 </span>
               </div>
               <p className="mt-3 text-[20px] font-semibold tabular tracking-tight text-(--color-fg)">
-                {tick ? `₹${formatINR(tick.price, { decimals: 2 })}` : "—"}
+                <LivePrice price={tick?.price} />
               </p>
               <div className="mt-1 h-5">
                 {tick && <Delta value={tick.changePct} />}

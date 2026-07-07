@@ -93,7 +93,7 @@ export function useUniversePrices() {
 // push them through here for immediate fetching. Deduped against fresh data
 // and against symbols already queued.
 
-const ON_DEMAND_TTL_MS = 15_000;
+const ON_DEMAND_TTL_MS = 9_000;
 let demandQueue: string[] = [];
 const queued = new Set<string>();
 let demandRunning = false;

@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between px-5 pt-5 pb-4">
-            <Logo />
+            <Logo interactive={false} />
             <button
               type="button"
               onClick={() => setOpen(false)}

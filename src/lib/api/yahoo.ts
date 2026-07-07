@@ -63,7 +63,7 @@ const FETCH_TIMEOUT_MS = 8_000;
 // If the preferred proxy hasn't answered within this window, race the backup
 // too and take whichever responds first — cuts tail latency (a slow/hung
 // proxy no longer blocks the whole request) without always doubling load.
-const HEDGE_AFTER_MS = 2_200;
+const HEDGE_AFTER_MS = 1_200;
 
 // Sticky proxy: once a proxy answers, try it first for subsequent requests.
 let preferredProxy = 0;
