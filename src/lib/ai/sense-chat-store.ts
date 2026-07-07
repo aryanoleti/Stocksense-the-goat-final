@@ -100,22 +100,16 @@ async function hydrateStockCard(answer: GeminiAnswer): Promise<SenseRich["stock"
   return undefined;
 }
 
+// Honest failure: no canned bullets, no made-up confidence score — just say
+// what happened. (The Gemini client already retried with backoff by now.)
 function fallbackResponse(prompt: string): SenseMessage {
   return {
     id: `a-${Date.now()}`,
     role: "ai",
     text: hasGeminiKey()
-      ? "I couldn't reach Gemini just now — please try again in a moment."
+      ? "Gemini is rate-limiting or briefly unreachable — I retried a few times without luck. Send your question again in a few seconds; it usually clears right up."
       : "Add a NEXT_PUBLIC_GEMINI_KEY to enable real AI responses. In the meantime, " +
         "for a question like \"" + prompt + "\" I'd start with last earnings, peer multiples, and recent news.",
-    rich: {
-      confidence: 30,
-      bullets: [
-        "Check the latest quarterly results and management commentary",
-        "Compare valuation multiples (P/E, P/B) to sector peers",
-        "Look at recent news, analyst revisions and insider activity",
-      ],
-    },
   };
 }
 

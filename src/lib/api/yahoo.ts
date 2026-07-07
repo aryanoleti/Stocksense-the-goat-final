@@ -27,8 +27,13 @@ export type Candle = { time: number; price: number };
 export type ChartRange = "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "2y";
 export type ChartInterval = "1m" | "5m" | "15m" | "30m" | "1h" | "1d" | "1wk";
 
-const QUOTE_TTL_MS = 4_000;
-const HISTORY_TTL_MS = 60_000;
+const QUOTE_TTL_MS = 3_000;
+
+// Intraday ranges tick within the trading day, so keep them fresh; daily and
+// longer ranges only change once per session, so cache them far longer.
+function chartTtl(range: ChartRange): number {
+  return range === "1d" || range === "5d" ? 3_500 : 60_000;
+}
 
 type CacheEntry<T> = { at: number; value: T };
 const quoteCache = new Map<string, CacheEntry<Quote>>();
@@ -55,32 +60,46 @@ export function yahooSymbol(symbol: string): string {
 }
 
 const FETCH_TIMEOUT_MS = 8_000;
+// If the preferred proxy hasn't answered within this window, race the backup
+// too and take whichever responds first — cuts tail latency (a slow/hung
+// proxy no longer blocks the whole request) without always doubling load.
+const HEDGE_AFTER_MS = 2_200;
 
 // Sticky proxy: once a proxy answers, try it first for subsequent requests.
-// When the preferred one is down (free proxies come and go), we only pay its
-// timeout once instead of on every single chunk.
 let preferredProxy = 0;
 
 async function fetchProxied(url: string): Promise<Response> {
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < PROXIES.length; attempt++) {
-    const idx = (preferredProxy + attempt) % PROXIES.length;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const r = await fetch(PROXIES[idx](url), { cache: "no-store", signal: controller.signal });
-      if (r.ok) {
-        preferredProxy = idx;
-        return r;
-      }
-      lastErr = new Error(`${r.status} ${r.statusText}`);
-    } catch (e) {
-      lastErr = e;
-    } finally {
-      clearTimeout(timeout);
-    }
+  const a = preferredProxy;
+  const b = (preferredProxy + 1) % PROXIES.length;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let settled = false;
+
+  const attempt = (idx: number, delayMs: number) =>
+    new Promise<Response>((resolve, reject) => {
+      setTimeout(async () => {
+        // Preferred already won during the hedge delay — skip the backup fetch.
+        if (settled) return reject(new Error("skipped"));
+        try {
+          const r = await fetch(PROXIES[idx](url), { cache: "no-store", signal: controller.signal });
+          if (!r.ok) return reject(new Error(`${r.status} ${r.statusText}`));
+          settled = true;
+          preferredProxy = idx;
+          resolve(r);
+        } catch (e) {
+          reject(e);
+        }
+      }, delayMs);
+    });
+
+  try {
+    return await Promise.any([attempt(a, 0), attempt(b, HEDGE_AFTER_MS)]);
+  } catch (agg) {
+    const err = (agg as AggregateError).errors?.find((e) => (e as Error)?.message !== "skipped");
+    throw err ?? new Error("All CORS proxies failed");
+  } finally {
+    clearTimeout(timeout);
   }
-  throw lastErr ?? new Error("All CORS proxies failed");
 }
 
 function once<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -146,7 +165,7 @@ export async function getChart(
   const ysym = yahooSymbol(symbol);
   const key = `${ysym}|${range}|${interval}`;
   const cached = chartCache.get(key);
-  if (cached && Date.now() - cached.at < HISTORY_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.at < chartTtl(range)) return cached.value;
 
   return once(`chart:${key}`, async () => {
     try {
