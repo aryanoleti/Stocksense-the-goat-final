@@ -79,6 +79,9 @@ jobs:
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           NEXT_PUBLIC_FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
           NEXT_PUBLIC_GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          # Optional: self-hosted Cloudflare Worker proxy (worker/README.md).
+          # Unset = app falls back to the free public CORS proxies.
+          NEXT_PUBLIC_YAHOO_PROXY: ${{ secrets.YAHOO_PROXY }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

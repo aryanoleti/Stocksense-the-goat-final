@@ -1,9 +1,13 @@
-// Yahoo Finance client. No key. Routed through corsproxy.io because Yahoo's
-// public endpoints don't set Access-Control-Allow-Origin for browsers.
-
-// allorigins first — it's the one that reliably answers; corsproxy.io moved to
-// a `?url=` format and sits behind Cloudflare, so it's fallback only.
+// Yahoo Finance client. No key. Yahoo's public endpoints don't send CORS
+// headers, so browser calls are routed through a proxy.
+//
+// If NEXT_PUBLIC_YAHOO_PROXY is set (a self-hosted Cloudflare Worker — see
+// worker/README.md), it's preferred: dedicated, faster, and not shared/
+// rate-limited. The free public proxies stay as automatic fallback, so the
+// app works with or without the Worker.
+const OWN_PROXY = process.env.NEXT_PUBLIC_YAHOO_PROXY?.replace(/\/+$/, "");
 const PROXIES = [
+  ...(OWN_PROXY ? [(u: string) => `${OWN_PROXY}/?url=${encodeURIComponent(u)}`] : []),
   (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
 ];
